@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Menu,
@@ -78,6 +78,7 @@ const whatsappNumber = "27731633836";
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -86,6 +87,17 @@ export default function Home() {
     service: "New Tombstone Sales",
     message: "",
   });
+
+  useEffect(() => {
+    function checkScreen() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    checkScreen();
+    window.addEventListener("resize", checkScreen);
+
+    return () => window.removeEventListener("resize", checkScreen);
+  }, []);
 
   function updateForm(
     event: React.ChangeEvent<
@@ -155,7 +167,7 @@ export default function Home() {
           </div>
         </a>
 
-        <nav style={desktopNav}>
+        <nav style={{ ...desktopNav, display: isMobile ? "none" : "flex" }}>
           <a href="#services" style={navLink}>Services</a>
           <a href="#catalogue" style={navLink}>Catalogue</a>
           <a href="#about" style={navLink}>About</a>
@@ -186,26 +198,52 @@ export default function Home() {
         </div>
       )}
 
-      <section id="home" style={heroSection}>
+      <section
+        id="home"
+        style={{
+          ...heroSection,
+          minHeight: isMobile ? "auto" : "78vh",
+          padding: isMobile ? "96px 18px 42px" : "96px 7% 48px",
+        }}
+      >
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          style={heroContent}
+          style={{
+            ...heroContent,
+            width: isMobile ? "100%" : "min(820px, 100%)",
+            padding: isMobile ? "30px 18px" : "36px 28px",
+          }}
         >
           <img
             src="/poloko-tombstones-logo.png"
             alt="Poloko Tombstones logo"
-            style={heroLogo}
+            style={{
+              ...heroLogo,
+              width: isMobile ? "150px" : "min(175px, 58vw)",
+            }}
           />
 
           <p style={smallLabel}>SOUTH AFRICA</p>
-          <h1 style={heroTitle}>Poloko Tombstones</h1>
+          <h1
+            style={{
+              ...heroTitle,
+              fontSize: isMobile ? "40px" : "clamp(36px, 6vw, 64px)",
+            }}
+          >
+            Poloko Tombstones
+          </h1>
           <p style={tagline}>A legacy carved in stone.</p>
 
           <GoldDivider />
 
-          <div style={statsGrid}>
+          <div
+            style={{
+              ...statsGrid,
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+            }}
+          >
             <div style={statCard}>
               <strong style={statNumber}>100%</strong>
               <span style={statText}>Granite Quality</span>
@@ -224,7 +262,7 @@ export default function Home() {
         </motion.div>
       </section>
 
-      <section id="difference" style={differenceSectionLight}>
+      <section id="difference" style={sectionCompact}>
         <div style={sectionIntroCenter}>
           <p style={smallLabel}>WHY CHOOSE US</p>
           <h2 style={sectionTitle}>
@@ -233,7 +271,7 @@ export default function Home() {
           <GoldDivider />
         </div>
 
-        <div style={differenceGrid}>
+        <div style={responsiveGrid(isMobile)}>
           <div style={differenceCard}>
             <Gem size={26} />
             <h3 style={differenceTitle}>Premium Granite</h3>
@@ -262,7 +300,7 @@ export default function Home() {
             <Hammer size={26} />
             <h3 style={differenceTitle}>Professional Craftsmanship</h3>
             <p style={differenceText}>
-              Our work is handled with care, precision, and pride.
+              Our work is handled with care, precision and pride.
             </p>
           </div>
         </div>
@@ -277,7 +315,12 @@ export default function Home() {
           <GoldDivider />
         </div>
 
-        <div style={serviceButtonGrid}>
+        <div
+          style={{
+            ...serviceButtonGrid,
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(240px, 1fr))",
+          }}
+        >
           {services.map((service, index) => (
             <button
               key={service}
@@ -298,11 +341,16 @@ export default function Home() {
           </h2>
           <GoldDivider />
           <p style={sectionDescription}>
-            Browse our tombstone, granite, quartz, ledger, and maintenance services.
+            Browse our tombstone, granite, quartz, ledger and maintenance services.
           </p>
         </div>
 
-        <div style={catalogueGrid}>
+        <div
+          style={{
+            ...catalogueGrid,
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(240px, 1fr))",
+          }}
+        >
           {catalogueItems.map((item) => (
             <article key={item.title} style={catalogueCard}>
               <img src={item.image} alt={item.title} style={catalogueImage} />
@@ -329,8 +377,23 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="about" style={aboutSection}>
-        <div style={portraitImageFrame}>
+      <section
+        id="about"
+        style={{
+          ...aboutSection,
+          gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 0.85fr) minmax(320px, 1.15fr)",
+          padding: isMobile ? "52px 18px" : "64px 7%",
+        }}
+      >
+        <div
+          style={{
+            ...portraitImageFrame,
+            width: isMobile ? "100%" : "min(350px, 88vw)",
+            maxWidth: isMobile ? "330px" : "350px",
+            height: isMobile ? "420px" : "500px",
+            margin: isMobile ? "0 auto" : undefined,
+          }}
+        >
           <img
             src="/hero.jpg"
             alt="Poloko Tombstones granite craftsmanship"
@@ -345,17 +408,17 @@ export default function Home() {
             Crafted with <span style={goldItalic}>Purpose</span>
           </h2>
 
-          <GoldDivider align="left" />
+          <GoldDivider align={isMobile ? "center" : "left"} />
 
           <p style={introStoryText}>
             Poloko Tombstones was built on a simple belief: every life deserves
-            to be remembered with dignity, beauty, and permanence, carved in stone.
+            to be remembered with dignity, beauty and permanence, carved in stone.
           </p>
 
           <p style={bodyText}>
             Poloko Tombstones is a newly established company with branches in
             Ganyesa and Garankuwa, built on more than 20 years of hands-on
-            experience in granite, tombstone, and stone craftsmanship.
+            experience in granite, tombstone and stone craftsmanship.
           </p>
 
           <p style={bodyText}>
@@ -364,12 +427,17 @@ export default function Home() {
             bringing the same standard of excellence to every stone we cut and polish.
           </p>
 
-          <div style={storyGrid}>
+          <div
+            style={{
+              ...storyGrid,
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(210px, 1fr))",
+            }}
+          >
             <div style={storyCard}>
               <span style={storySymbol}>✦</span>
               <strong style={storyTitle}>In-House Excellence</strong>
               <p style={storyText}>
-                Cutting, polishing, and sandblasting handled with care.
+                Cutting, polishing and sandblasting handled with care.
               </p>
             </div>
 
@@ -385,7 +453,7 @@ export default function Home() {
               <span style={storySymbol}>❖</span>
               <strong style={storyTitle}>Family & Trade</strong>
               <p style={storyText}>
-                Serving families, funeral parlours, and property clients.
+                Serving families, funeral parlours and property clients.
               </p>
             </div>
 
@@ -400,7 +468,14 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="contact" style={contactSection}>
+      <section
+        id="contact"
+        style={{
+          ...contactSection,
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+          padding: isMobile ? "52px 18px" : "64px 7%",
+        }}
+      >
         <div style={contactInfo}>
           <p style={smallLabel}>GET IN TOUCH</p>
 
@@ -408,11 +483,11 @@ export default function Home() {
             Request a <span style={goldItalic}>Quote</span>
           </h2>
 
-          <GoldDivider align="left" />
+          <GoldDivider align={isMobile ? "center" : "left"} />
 
           <p style={introStoryText}>
             Let us help you create a memorial or granite product made with care,
-            dignity, and precision.
+            dignity and precision.
           </p>
 
           <div style={contactCards}>
@@ -423,7 +498,7 @@ export default function Home() {
                 <p style={contactText}>750 Zone 7</p>
                 <a href="tel:+27823915772" style={contactLink}>082 391 5772</a>
                 <a href="tel:+27731633836" style={contactLink}>073 163 3836</a>
-                <a href="+27636644824" style={contactLink}>063 664 4824</a>
+                <a href="tel:+27636644824" style={contactLink}>063 664 4824</a>
               </div>
             </div>
 
@@ -568,11 +643,20 @@ function GoldDivider({ align = "center" }: { align?: "center" | "left" }) {
   );
 }
 
+function responsiveGrid(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "16px",
+  };
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background: "#F4EFE6",
   color: "#17130E",
   fontFamily: "Georgia, 'Times New Roman', serif",
+  overflowX: "hidden",
 };
 
 const header: React.CSSProperties = {
@@ -618,7 +702,6 @@ const brandSubTitle: React.CSSProperties = {
 };
 
 const desktopNav: React.CSSProperties = {
-  display: "flex",
   alignItems: "center",
   gap: "24px",
 };
@@ -675,27 +758,22 @@ const menuLink: React.CSSProperties = {
 };
 
 const heroSection: React.CSSProperties = {
-  minHeight: "78vh",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "96px 7% 48px",
   background:
     "radial-gradient(circle at top, rgba(200,169,106,0.18), transparent 38%), linear-gradient(135deg, #17130E 0%, #262015 44%, #F4EFE6 44%, #FFF9EF 100%)",
 };
 
 const heroContent: React.CSSProperties = {
-  width: "min(820px, 100%)",
   textAlign: "center",
   background: "rgba(255,249,239,0.94)",
   border: "1px solid rgba(200,169,106,0.45)",
   borderRadius: "28px",
-  padding: "36px 28px",
   boxShadow: "0 25px 65px rgba(35,27,18,0.18)",
 };
 
 const heroLogo: React.CSSProperties = {
-  width: "min(175px, 58vw)",
   height: "auto",
   objectFit: "contain",
   margin: "0 auto 12px",
@@ -712,7 +790,6 @@ const smallLabel: React.CSSProperties = {
 };
 
 const heroTitle: React.CSSProperties = {
-  fontSize: "clamp(36px, 6vw, 64px)",
   lineHeight: 1,
   margin: 0,
   color: "#17130E",
@@ -746,7 +823,6 @@ const dividerDiamond: React.CSSProperties = {
 
 const statsGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
   gap: "12px",
   marginTop: "24px",
 };
@@ -775,7 +851,7 @@ const statText: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-const differenceSectionLight: React.CSSProperties = {
+const sectionCompact: React.CSSProperties = {
   padding: "42px 7% 58px",
   background: "#FFF9EF",
 };
@@ -819,12 +895,6 @@ const sectionDescription: React.CSSProperties = {
   margin: "0 auto",
 };
 
-const differenceGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "16px",
-};
-
 const differenceCard: React.CSSProperties = {
   border: "1px solid #D8C29B",
   padding: "22px",
@@ -848,7 +918,6 @@ const differenceText: React.CSSProperties = {
 
 const serviceButtonGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
   gap: "12px 18px",
   maxWidth: "980px",
   margin: "0 auto",
@@ -874,7 +943,6 @@ const activeServiceButton: React.CSSProperties = {
 
 const catalogueGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
   gap: "16px",
 };
 
@@ -926,17 +994,13 @@ const catalogueButton: React.CSSProperties = {
 };
 
 const aboutSection: React.CSSProperties = {
-  padding: "64px 7%",
   background: "#FFF9EF",
   display: "grid",
-  gridTemplateColumns: "minmax(260px, 0.85fr) minmax(320px, 1.15fr)",
   gap: "38px",
   alignItems: "center",
 };
 
 const portraitImageFrame: React.CSSProperties = {
-  width: "min(350px, 88vw)",
-  height: "500px",
   borderRadius: "180px 180px 24px 24px",
   overflow: "hidden",
   border: "1px solid rgba(200,169,106,0.55)",
@@ -971,7 +1035,6 @@ const introStoryText: React.CSSProperties = {
 
 const storyGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
   gap: "12px",
   marginTop: "22px",
 };
@@ -1006,10 +1069,8 @@ const storyText: React.CSSProperties = {
 };
 
 const contactSection: React.CSSProperties = {
-  padding: "64px 7%",
   background: "#FFF9EF",
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
   gap: "34px",
   alignItems: "start",
 };
