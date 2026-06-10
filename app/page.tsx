@@ -423,6 +423,7 @@ export default function Home() {
                 <p style={contactText}>750 Zone 7</p>
                 <a href="tel:+27823915772" style={contactLink}>082 391 5772</a>
                 <a href="tel:+27731633836" style={contactLink}>073 163 3836</a>
+                <a href="+27636644824" style={contactLink}>063 664 4824</a>
               </div>
             </div>
 
