@@ -175,7 +175,7 @@ const menuCard: React.CSSProperties = {
 };
 
 const logoutButton: React.CSSProperties = {
-  background: "#7A1F1F",
+  background: "#151111",
   color: "white",
   border: "none",
   padding: "12px 18px",
