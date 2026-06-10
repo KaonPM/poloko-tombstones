@@ -20,7 +20,7 @@ import {
 
 const services = [
   "New Tombstone Sales",
-  "Tombstone Maintenance",
+  "Tombstone Repair",
   "Granite Kitchen Tops",
   "Quartz Kitchen Tops",
   "Cut to Size Granite",
@@ -37,7 +37,7 @@ const catalogueItems = [
     href: "/tombstones",
   },
   {
-    title: "Tombstone Maintenance",
+    title: "Tombstone Repair",
     image: "/tombstone-maintenance.jpg",
     description:
       "Cleaning, restoration, lettering touch-ups, and repairs for existing tombstones.",
@@ -341,7 +341,7 @@ export default function Home() {
           </h2>
           <GoldDivider />
           <p style={sectionDescription}>
-            Browse our tombstone, granite, quartz, ledger and maintenance services.
+            Browse our tombstone, granite, quartz, ledger and repair services.
           </p>
         </div>
 
