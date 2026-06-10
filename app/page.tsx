@@ -20,7 +20,7 @@ import {
 
 const services = [
   "New Tombstone Sales",
-  "Tombstone Repair",
+  "Tombstone Repairs",
   "Granite Kitchen Tops",
   "Quartz Kitchen Tops",
   "Cut to Size Granite",
@@ -37,7 +37,7 @@ const catalogueItems = [
     href: "/tombstones",
   },
   {
-    title: "Tombstone Repair",
+    title: "Tombstone Repairs",
     image: "/tombstone-maintenance.jpg",
     description:
       "Cleaning, restoration, lettering touch-ups and repairs for existing tombstones.",
