@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Product = {
@@ -24,8 +25,9 @@ const categories = [
 ];
 
 export default function AdminProductsPage() {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [password, setPassword] = useState("");
+  const router = useRouter();
+
+  const [checking, setChecking] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -40,13 +42,22 @@ export default function AdminProductsPage() {
 
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-  function login() {
-    if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-      setLoggedIn(true);
-      fetchProducts();
-    } else {
-      alert("Incorrect password.");
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  async function checkSession() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.push("/admin/login");
+      return;
     }
+
+    setChecking(false);
+    fetchProducts();
   }
 
   async function fetchProducts() {
@@ -140,32 +151,37 @@ export default function AdminProductsPage() {
     fetchProducts();
   }
 
-  if (!loggedIn) {
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/admin/login");
+  }
+
+  if (checking) {
     return (
       <main style={page}>
-        <div style={loginBox}>
-          <h1 style={title}>Poloko Admin</h1>
-          <p style={text}>Enter admin password to manage tombstone products.</p>
-
-          <input
-            type="password"
-            placeholder="Admin password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={input}
-          />
-
-          <button onClick={login} style={button}>
-            Login
-          </button>
-        </div>
+        <p style={text}>Checking admin access...</p>
       </main>
     );
   }
 
   return (
     <main style={page}>
-      <h1 style={title}>Tombstone Product Admin</h1>
+      <div style={header}>
+        <div>
+          <h1 style={title}>Tombstone Product Admin</h1>
+          <p style={text}>Manage product catalogue, pricing and images.</p>
+        </div>
+
+        <div style={headerActions}>
+          <button onClick={() => router.push("/admin")} style={secondaryButton}>
+            Dashboard
+          </button>
+
+          <button onClick={logout} style={deleteButton}>
+            Logout
+          </button>
+        </div>
+      </div>
 
       <form onSubmit={addProduct} style={formBox}>
         <input
@@ -269,17 +285,23 @@ const page: React.CSSProperties = {
   fontFamily: "Georgia, 'Times New Roman', serif",
 };
 
-const loginBox: React.CSSProperties = {
-  maxWidth: "420px",
-  margin: "80px auto",
-  background: "#FFF9EF",
-  border: "1px solid #D8C29B",
-  padding: "30px",
+const header: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "20px",
+  marginBottom: "30px",
+};
+
+const headerActions: React.CSSProperties = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
 };
 
 const title: React.CSSProperties = {
   fontSize: "34px",
-  marginBottom: "20px",
+  marginBottom: "10px",
 };
 
 const text: React.CSSProperties = {
@@ -300,6 +322,7 @@ const input: React.CSSProperties = {
   width: "100%",
   padding: "13px",
   border: "1px solid #D8C29B",
+  background: "#FFFDF7",
 };
 
 const textarea: React.CSSProperties = {
@@ -318,6 +341,15 @@ const button: React.CSSProperties = {
   color: "#C8A96A",
   border: "none",
   padding: "14px 20px",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const secondaryButton: React.CSSProperties = {
+  background: "#C8A96A",
+  color: "#14110D",
+  border: "none",
+  padding: "12px 16px",
   cursor: "pointer",
   fontWeight: 700,
 };
@@ -344,7 +376,7 @@ const cardBody: React.CSSProperties = {
 };
 
 const deleteButton: React.CSSProperties = {
-  background: "#7A1F1F",
+  background: "#151212",
   color: "white",
   border: "none",
   padding: "10px 14px",
