@@ -1,8 +1,47 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function AdminDashboard() {
+  const router = useRouter();
+
+  const [checking, setChecking] = useState(true);
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  async function checkSession() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.push("/admin/login");
+      return;
+    }
+
+    setAdminEmail(session.user.email || null);
+    setChecking(false);
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/admin/login");
+  }
+
+  if (checking) {
+    return (
+      <main style={page}>
+        <p style={subtitle}>Checking admin access...</p>
+      </main>
+    );
+  }
+
   return (
     <main style={page}>
       <div style={header}>
@@ -11,7 +50,12 @@ export default function AdminDashboard() {
           <p style={subtitle}>
             Manage products, leads, quotes, payments and orders.
           </p>
+          <p style={smallText}>Logged in as: {adminEmail}</p>
         </div>
+
+        <button onClick={logout} style={logoutButton}>
+          Logout
+        </button>
       </div>
 
       <section style={statsGrid}>
@@ -74,6 +118,10 @@ const page: React.CSSProperties = {
 };
 
 const header: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "20px",
   marginBottom: "40px",
 };
 
@@ -85,6 +133,11 @@ const title: React.CSSProperties = {
 
 const subtitle: React.CSSProperties = {
   color: "#6C5A45",
+};
+
+const smallText: React.CSSProperties = {
+  color: "#6C5A45",
+  fontSize: "14px",
 };
 
 const statsGrid: React.CSSProperties = {
@@ -119,4 +172,13 @@ const menuCard: React.CSSProperties = {
   textDecoration: "none",
   color: "#14110D",
   display: "block",
+};
+
+const logoutButton: React.CSSProperties = {
+  background: "#7A1F1F",
+  color: "white",
+  border: "none",
+  padding: "12px 18px",
+  cursor: "pointer",
+  fontWeight: 700,
 };
