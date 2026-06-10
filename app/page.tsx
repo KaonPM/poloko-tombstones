@@ -40,7 +40,7 @@ const catalogueItems = [
     title: "Tombstone Repair",
     image: "/tombstone-maintenance.jpg",
     description:
-      "Cleaning, restoration, lettering touch-ups, and repairs for existing tombstones.",
+      "Cleaning, restoration, lettering touch-ups and repairs for existing tombstones.",
     type: "inquiry",
   },
   {
