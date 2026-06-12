@@ -17,10 +17,21 @@ export default function TombstonesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  function openProduct(product: Product) {
+    setSelectedProduct(product);
+    setZoom(1);
+  }
+
+  function closeProduct() {
+    setSelectedProduct(null);
+    setZoom(1);
+  }
 
   async function fetchProducts() {
     const { data, error } = await supabase
@@ -56,8 +67,16 @@ export default function TombstonesPage() {
               {product.image_url ? (
                 <button
                   type="button"
-                  onClick={() => setSelectedProduct(product)}
+                  onClick={() => openProduct(product)}
                   style={imageButton}
+                  onMouseEnter={(e) => {
+                    const img = e.currentTarget.querySelector("img");
+                    if (img) img.style.transform = "scale(1.08)";
+                  }}
+                  onMouseLeave={(e) => {
+                    const img = e.currentTarget.querySelector("img");
+                    if (img) img.style.transform = "scale(1)";
+                  }}
                 >
                   <img
                     src={product.image_url}
@@ -88,22 +107,51 @@ export default function TombstonesPage() {
       )}
 
       {selectedProduct ? (
-        <div style={modalOverlay} onClick={() => setSelectedProduct(null)}>
+        <div style={modalOverlay} onClick={closeProduct}>
           <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => setSelectedProduct(null)}
-              style={closeButton}
-            >
+            <button type="button" onClick={closeProduct} style={closeButton}>
               ×
             </button>
 
             {selectedProduct.image_url ? (
-              <img
-                src={selectedProduct.image_url}
-                alt={selectedProduct.title}
-                style={modalImage}
-              />
+              <>
+                <div style={zoomControls}>
+                  <button
+                    type="button"
+                    onClick={() => setZoom((value) => Math.min(value + 0.2, 2))}
+                    style={zoomButton}
+                  >
+                    Zoom In
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setZoom((value) => Math.max(value - 0.2, 1))}
+                    style={zoomButton}
+                  >
+                    Zoom Out
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setZoom(1)}
+                    style={zoomButton}
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                <div style={modalImageWrap}>
+                  <img
+                    src={selectedProduct.image_url}
+                    alt={selectedProduct.title}
+                    style={{
+                      ...modalImage,
+                      transform: `scale(${zoom})`,
+                    }}
+                  />
+                </div>
+              </>
             ) : null}
 
             <div style={modalContent}>
@@ -178,8 +226,8 @@ const subtitle: React.CSSProperties = {
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-  gap: "18px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: "22px",
   maxWidth: "1180px",
   margin: "0 auto",
 };
@@ -193,21 +241,25 @@ const card: React.CSSProperties = {
 
 const imageButton: React.CSSProperties = {
   width: "100%",
+  height: "260px",
   padding: 0,
   border: "none",
-  background: "transparent",
+  background: "#E8DDC9",
   cursor: "zoom-in",
+  overflow: "hidden",
+  display: "block",
 };
 
 const image: React.CSSProperties = {
   width: "100%",
-  height: "230px",
-  objectFit: "cover",
+  height: "100%",
+  objectFit: "contain",
   display: "block",
+  transition: "transform 0.35s ease",
 };
 
 const imagePlaceholder: React.CSSProperties = {
-  height: "230px",
+  height: "260px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -228,8 +280,9 @@ const category: React.CSSProperties = {
 };
 
 const cardTitle: React.CSSProperties = {
-  fontSize: "24px",
+  fontSize: "22px",
   margin: "0 0 8px",
+  lineHeight: 1.25,
 };
 
 const price: React.CSSProperties = {
@@ -259,7 +312,7 @@ const button: React.CSSProperties = {
 const modalOverlay: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(20,17,13,0.75)",
+  background: "rgba(20,17,13,0.78)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -270,7 +323,7 @@ const modalOverlay: React.CSSProperties = {
 const modalCard: React.CSSProperties = {
   position: "relative",
   width: "100%",
-  maxWidth: "760px",
+  maxWidth: "860px",
   maxHeight: "90vh",
   overflowY: "auto",
   background: "#FFF9EF",
@@ -288,15 +341,48 @@ const closeButton: React.CSSProperties = {
   color: "#C8A96A",
   cursor: "pointer",
   fontSize: "24px",
+  zIndex: 3,
+};
+
+const zoomControls: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
   zIndex: 2,
+  display: "flex",
+  gap: "8px",
+  justifyContent: "center",
+  flexWrap: "wrap",
+  padding: "12px",
+  background: "#17130E",
+};
+
+const zoomButton: React.CSSProperties = {
+  background: "#C8A96A",
+  color: "#14110D",
+  border: "none",
+  padding: "9px 12px",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: "12px",
+};
+
+const modalImageWrap: React.CSSProperties = {
+  width: "100%",
+  height: "520px",
+  overflow: "auto",
+  background: "#17130E",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const modalImage: React.CSSProperties = {
-  width: "100%",
-  maxHeight: "520px",
+  maxWidth: "100%",
+  maxHeight: "100%",
   objectFit: "contain",
-  background: "#17130E",
   display: "block",
+  transition: "transform 0.25s ease",
+  transformOrigin: "center center",
 };
 
 const modalContent: React.CSSProperties = {
