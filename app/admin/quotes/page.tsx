@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import jsPDF from "jspdf";
 
@@ -38,8 +38,10 @@ type QuoteItem = {
   unit_price: number;
 };
 
-export default function AdminQuotesPage() {
+function AdminQuotesPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const leadFromUrl = searchParams.get("lead");
 
   const [checking, setChecking] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -79,7 +81,8 @@ export default function AdminQuotesPage() {
   async function fetchLeads() {
     const { data, error } = await supabase
       .from("poloko_leads")
-      .select(`
+      .select(
+        `
         id,
         interest_type,
         message,
@@ -89,7 +92,8 @@ export default function AdminQuotesPage() {
           phone,
           email
         )
-      `)
+      `
+      )
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -97,7 +101,22 @@ export default function AdminQuotesPage() {
       return;
     }
 
-    setLeads((data as unknown as Lead[]) || []);
+    const fetchedLeads = (data as unknown as Lead[]) || [];
+    setLeads(fetchedLeads);
+
+    if (leadFromUrl) {
+      const matchingLead = fetchedLeads.find((lead) => lead.id === leadFromUrl);
+
+      if (matchingLead) {
+        setSelectedLeadId(matchingLead.id);
+        setItem({
+          item_name: matchingLead.interest_type || "",
+          description: matchingLead.message || "",
+          quantity: 1,
+          unit_price: 0,
+        });
+      }
+    }
   }
 
   async function fetchQuotes() {
@@ -127,6 +146,11 @@ export default function AdminQuotesPage() {
 
     if (!lead) {
       alert("Please select a lead.");
+      return;
+    }
+
+    if (!item.item_name || item.unit_price <= 0 || item.quantity <= 0) {
+      alert("Please complete the quote item, quantity and price.");
       return;
     }
 
@@ -161,44 +185,47 @@ export default function AdminQuotesPage() {
       return;
     }
 
-    const { error: itemError } = await supabase.from("poloko_quote_items").insert({
-      quote_id: quote.id,
-      item_name: item.item_name,
-      description: item.description,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total_price: totalAmount,
-    });
-
-    setSaving(false);
+    const { error: itemError } = await supabase
+      .from("poloko_quote_items")
+      .insert({
+        quote_id: quote.id,
+        item_name: item.item_name,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: totalAmount,
+      });
 
     if (itemError) {
+      setSaving(false);
       alert(itemError.message);
       return;
     }
 
+    await supabase.from("poloko_leads").update({ status: "Quoted" }).eq("id", lead.id);
+
+    setSaving(false);
     alert("Quote created successfully.");
+
     setSelectedLeadId("");
     setItem({ item_name: "", description: "", quantity: 1, unit_price: 0 });
     setDepositPercentage(50);
     setNotes("Quote valid for 30 days.");
+
     fetchQuotes();
+    fetchLeads();
   }
 
   async function downloadQuotePdf(quote: Quote) {
     const doc = new jsPDF("p", "mm", "a4");
-
     const logoUrl = "/poloko-tombstones-logo.png";
 
     try {
       const logo = await loadImageAsBase64(logoUrl);
-
-      doc.addImage(logo, "PNG", 75, 95, 60, 60, undefined, "FAST");
-      doc.addImage(logo, "PNG", 55, 75, 100, 100, undefined, "FAST");
-
+      doc.addImage(logo, "PNG", 60, 80, 90, 90, undefined, "FAST");
       doc.addImage(logo, "PNG", 15, 12, 32, 32, undefined, "FAST");
     } catch {
-      // PDF still generates if logo fails.
+      // Continue without logo if unavailable.
     }
 
     doc.setFont("helvetica", "bold");
@@ -211,7 +238,6 @@ export default function AdminQuotesPage() {
     doc.text("Email: info@polokotombstones.co.za", 55, 35);
     doc.text("Quote Document", 150, 22);
 
-    doc.setLineWidth(0.3);
     doc.line(15, 48, 195, 48);
 
     doc.setFont("helvetica", "bold");
@@ -220,22 +246,18 @@ export default function AdminQuotesPage() {
     doc.text(`Status: ${quote.status}`, 15, 68);
     doc.text(`Valid Until: ${quote.valid_until || "30 days"}`, 15, 76);
 
+    doc.text("Financial Summary", 15, 100);
+
     doc.setFont("helvetica", "normal");
-    doc.text("Customer details are linked to the saved quote record.", 15, 88);
+    doc.text(`Total Amount: R${Number(quote.total_amount).toFixed(2)}`, 15, 112);
+    doc.text(`Deposit Required: R${Number(quote.deposit_amount).toFixed(2)}`, 15, 120);
+    doc.text(`Balance Due: R${Number(quote.balance_amount).toFixed(2)}`, 15, 128);
 
     doc.setFont("helvetica", "bold");
-    doc.text("Financial Summary", 15, 105);
+    doc.text("Notes", 15, 148);
 
     doc.setFont("helvetica", "normal");
-    doc.text(`Total Amount: R${Number(quote.total_amount).toFixed(2)}`, 15, 116);
-    doc.text(`Deposit Required: R${Number(quote.deposit_amount).toFixed(2)}`, 15, 124);
-    doc.text(`Balance Due: R${Number(quote.balance_amount).toFixed(2)}`, 15, 132);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Notes", 15, 150);
-
-    doc.setFont("helvetica", "normal");
-    doc.text(quote.notes || "Quote valid for 30 days.", 15, 160, {
+    doc.text(quote.notes || "Quote valid for 30 days.", 15, 158, {
       maxWidth: 170,
     });
 
@@ -261,6 +283,9 @@ export default function AdminQuotesPage() {
     router.push("/admin/login");
   }
 
+  const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
+  const selectedCustomer = selectedLead?.customer?.[0];
+
   if (checking) {
     return (
       <main style={page}>
@@ -282,6 +307,10 @@ export default function AdminQuotesPage() {
             Dashboard
           </button>
 
+          <button onClick={() => router.push("/admin/leads")} style={secondaryButton}>
+            Leads
+          </button>
+
           <button onClick={logout} style={deleteButton}>
             Logout
           </button>
@@ -293,21 +322,52 @@ export default function AdminQuotesPage() {
 
         <select
           value={selectedLeadId}
-          onChange={(e) => setSelectedLeadId(e.target.value)}
+          onChange={(e) => {
+            const newLeadId = e.target.value;
+            setSelectedLeadId(newLeadId);
+
+            const selected = leads.find((lead) => lead.id === newLeadId);
+
+            if (selected) {
+              setItem({
+                item_name: selected.interest_type || "",
+                description: selected.message || "",
+                quantity: 1,
+                unit_price: 0,
+              });
+            }
+          }}
           required
           style={input}
         >
           <option value="">Select lead</option>
           {leads.map((lead) => {
             const customer = lead.customer?.[0];
+
             return (
               <option key={lead.id} value={lead.id}>
-                {customer?.full_name || "Unknown Customer"} -{" "}
-                {lead.interest_type}
+                {customer?.full_name || "Unknown Customer"} - {lead.interest_type}
               </option>
             );
           })}
         </select>
+
+        {selectedLead ? (
+          <div style={leadPreview}>
+            <p>
+              <strong>Customer:</strong> {selectedCustomer?.full_name || "Unknown Customer"}
+            </p>
+            <p>
+              <strong>Phone:</strong> {selectedCustomer?.phone || "Not provided"}
+            </p>
+            <p>
+              <strong>Email:</strong> {selectedCustomer?.email || "Not provided"}
+            </p>
+            <p>
+              <strong>Original Request:</strong> {selectedLead.message || "None"}
+            </p>
+          </div>
+        ) : null}
 
         <input
           placeholder="Item name, e.g. Double Headstone"
@@ -328,9 +388,7 @@ export default function AdminQuotesPage() {
           type="number"
           placeholder="Quantity"
           value={item.quantity}
-          onChange={(e) =>
-            setItem({ ...item, quantity: Number(e.target.value) })
-          }
+          onChange={(e) => setItem({ ...item, quantity: Number(e.target.value) })}
           required
           style={input}
         />
@@ -339,9 +397,7 @@ export default function AdminQuotesPage() {
           type="number"
           placeholder="Unit price"
           value={item.unit_price}
-          onChange={(e) =>
-            setItem({ ...item, unit_price: Number(e.target.value) })
-          }
+          onChange={(e) => setItem({ ...item, unit_price: Number(e.target.value) })}
           required
           style={input}
         />
@@ -360,6 +416,23 @@ export default function AdminQuotesPage() {
           onChange={(e) => setNotes(e.target.value)}
           style={textarea}
         />
+
+        <div style={summaryBox}>
+          <p>
+            <strong>Total:</strong> R{Number(item.quantity * item.unit_price || 0).toFixed(2)}
+          </p>
+          <p>
+            <strong>Deposit:</strong> R
+            {Number((item.quantity * item.unit_price || 0) * (depositPercentage / 100)).toFixed(2)}
+          </p>
+          <p>
+            <strong>Balance:</strong> R
+            {Number(
+              (item.quantity * item.unit_price || 0) -
+                (item.quantity * item.unit_price || 0) * (depositPercentage / 100)
+            ).toFixed(2)}
+          </p>
+        </div>
 
         <button type="submit" disabled={saving} style={button}>
           {saving ? "Saving Quote..." : "Create Quote"}
@@ -382,6 +455,20 @@ export default function AdminQuotesPage() {
         ))}
       </section>
     </main>
+  );
+}
+
+export default function AdminQuotesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={page}>
+          <p style={text}>Loading quotes...</p>
+        </main>
+      }
+    >
+      <AdminQuotesPageContent />
+    </Suspense>
   );
 }
 
@@ -440,6 +527,20 @@ const input: React.CSSProperties = {
 const textarea: React.CSSProperties = {
   ...input,
   minHeight: "100px",
+};
+
+const leadPreview: React.CSSProperties = {
+  background: "#F4EFE6",
+  border: "1px solid #D8C29B",
+  padding: "14px",
+  color: "#2B241B",
+};
+
+const summaryBox: React.CSSProperties = {
+  background: "#F4EFE6",
+  border: "1px solid #D8C29B",
+  padding: "14px",
+  color: "#2B241B",
 };
 
 const button: React.CSSProperties = {
