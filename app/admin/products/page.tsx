@@ -82,20 +82,33 @@ export default function AdminProductsPage() {
     if (!imageFile) return "";
 
     const fileExt = imageFile.name.split(".").pop();
-    const fileName = `${Date.now()}.${fileExt}`;
+    const fileName = `${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2)}.${fileExt}`;
     const filePath = fileName;
 
-    const { error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from("tombstone-products")
-      .upload(filePath, imageFile);
+      .upload(filePath, imageFile, {
+        cacheControl: "3600",
+        upsert: false,
+      });
 
     if (uploadError) {
       throw new Error(uploadError.message);
     }
 
+    if (!uploadData?.path) {
+      throw new Error("Image uploaded but no file path was returned.");
+    }
+
     const { data } = supabase.storage
       .from("tombstone-products")
-      .getPublicUrl(filePath);
+      .getPublicUrl(uploadData.path);
+
+    if (!data.publicUrl) {
+      throw new Error("Could not generate public image URL.");
+    }
 
     return data.publicUrl;
   }
@@ -106,6 +119,8 @@ export default function AdminProductsPage() {
 
     try {
       const uploadedImageUrl = await uploadImage();
+
+      console.log("Uploaded image URL:", uploadedImageUrl);
 
       if (editingProduct) {
         const { error } = await supabase
@@ -158,6 +173,7 @@ export default function AdminProductsPage() {
   function startEdit(product: Product) {
     setEditingProduct(product);
     setViewingProduct(null);
+
     setForm({
       title: product.title,
       category: product.category,
@@ -166,6 +182,7 @@ export default function AdminProductsPage() {
       is_featured: product.is_featured,
       is_active: product.is_active,
     });
+
     setImageFile(null);
 
     setTimeout(() => {
@@ -285,6 +302,10 @@ export default function AdminProductsPage() {
           style={input}
         />
 
+        {imageFile ? (
+          <p style={helpText}>Selected image: {imageFile.name}</p>
+        ) : null}
+
         {editingProduct?.image_url ? (
           <p style={helpText}>
             Current image will remain unless you upload a new one.
@@ -299,9 +320,10 @@ export default function AdminProductsPage() {
               setForm({ ...form, is_featured: e.target.checked })
             }
           />
-          Featured product
+          <strong>Featured product</strong>
           <span style={helpText}>
-            Highlight this product later on the homepage or featured section.
+            Use this when you want to highlight a product later on the homepage
+            or in a featured tombstones section.
           </span>
         </label>
 
@@ -313,10 +335,10 @@ export default function AdminProductsPage() {
               setForm({ ...form, is_active: e.target.checked })
             }
           />
-          Active
+          <strong>Active</strong>
           <span style={helpText}>
-            Active products show on the public catalogue. Inactive products stay
-            hidden.
+            Active products show on the public catalogue. If unticked, the
+            product stays in admin but is hidden from customers.
           </span>
         </label>
 
@@ -352,9 +374,7 @@ export default function AdminProductsPage() {
                   <span style={featuredBadge}>Featured</span>
                 ) : null}
 
-                <span
-                  style={product.is_active ? activeBadge : inactiveBadge}
-                >
+                <span style={product.is_active ? activeBadge : inactiveBadge}>
                   {product.is_active ? "Active" : "Hidden"}
                 </span>
               </div>
@@ -405,7 +425,9 @@ export default function AdminProductsPage() {
                 alt={viewingProduct.title}
                 style={modalImage}
               />
-            ) : null}
+            ) : (
+              <div style={modalNoImage}>No Image</div>
+            )}
 
             <div style={modalContent}>
               <p style={text}>{viewingProduct.category}</p>
@@ -420,9 +442,7 @@ export default function AdminProductsPage() {
                   <span style={featuredBadge}>Featured</span>
                 ) : null}
 
-                <span
-                  style={viewingProduct.is_active ? activeBadge : inactiveBadge}
-                >
+                <span style={viewingProduct.is_active ? activeBadge : inactiveBadge}>
                   {viewingProduct.is_active ? "Active" : "Hidden"}
                 </span>
               </div>
@@ -661,6 +681,15 @@ const modalImage: React.CSSProperties = {
   objectFit: "contain",
   background: "#17130E",
   display: "block",
+};
+
+const modalNoImage: React.CSSProperties = {
+  height: "300px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#E8DDC9",
+  color: "#7A5A28",
 };
 
 const modalContent: React.CSSProperties = {
