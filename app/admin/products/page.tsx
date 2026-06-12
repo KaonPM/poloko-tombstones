@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -24,22 +24,26 @@ const categories = [
   "Ledger",
 ];
 
+const emptyForm = {
+  title: "",
+  category: "Single Headstone",
+  description: "",
+  price: "",
+  is_featured: false,
+  is_active: true,
+};
+
 export default function AdminProductsPage() {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const [checking, setChecking] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [saving, setSaving] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
 
-  const [form, setForm] = useState({
-    title: "",
-    category: "Single Headstone",
-    description: "",
-    price: "",
-    is_featured: false,
-    is_active: true,
-  });
-
+  const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -74,68 +78,112 @@ export default function AdminProductsPage() {
     setProducts(data || []);
   }
 
-  async function addProduct(e: React.FormEvent) {
+  async function uploadImage() {
+    if (!imageFile) return "";
+
+    const fileExt = imageFile.name.split(".").pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = fileName;
+
+    const { error: uploadError } = await supabase.storage
+      .from("tombstone-products")
+      .upload(filePath, imageFile);
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data } = supabase.storage
+      .from("tombstone-products")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  }
+
+  async function saveProduct(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
 
     try {
-      let imageUrl = "";
+      const uploadedImageUrl = await uploadImage();
 
-      if (imageFile) {
-        const fileExt = imageFile.name.split(".").pop();
-        const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = fileName;
+      if (editingProduct) {
+        const { error } = await supabase
+          .from("tombstone_products")
+          .update({
+            title: form.title,
+            category: form.category,
+            description: form.description,
+            price: form.price,
+            image_url: uploadedImageUrl || editingProduct.image_url,
+            is_featured: form.is_featured,
+            is_active: form.is_active,
+          })
+          .eq("id", editingProduct.id);
 
-        const { error: uploadError } = await supabase.storage
-          .from("tombstone-products")
-          .upload(filePath, imageFile);
-
-        if (uploadError) {
-          alert(uploadError.message);
+        if (error) {
+          alert(error.message);
           return;
         }
 
-        const { data } = supabase.storage
-          .from("tombstone-products")
-          .getPublicUrl(filePath);
+        alert("Product updated successfully.");
+      } else {
+        const { error } = await supabase.from("tombstone_products").insert({
+          title: form.title,
+          category: form.category,
+          description: form.description,
+          price: form.price,
+          image_url: uploadedImageUrl,
+          is_featured: form.is_featured,
+          is_active: form.is_active,
+        });
 
-        imageUrl = data.publicUrl;
+        if (error) {
+          alert(error.message);
+          return;
+        }
+
+        alert("Product added successfully.");
       }
 
-      const { error } = await supabase.from("tombstone_products").insert({
-        title: form.title,
-        category: form.category,
-        description: form.description,
-        price: form.price,
-        image_url: imageUrl,
-        is_featured: form.is_featured,
-        is_active: form.is_active,
-      });
-
-      if (error) {
-        alert(error.message);
-        return;
-      }
-
-      setForm({
-        title: "",
-        category: "Single Headstone",
-        description: "",
-        price: "",
-        is_featured: false,
-        is_active: true,
-      });
-
-      setImageFile(null);
+      resetForm();
       fetchProducts();
-      alert("Product added successfully.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
       setSaving(false);
     }
   }
 
+  function startEdit(product: Product) {
+    setEditingProduct(product);
+    setViewingProduct(null);
+    setForm({
+      title: product.title,
+      category: product.category,
+      description: product.description || "",
+      price: product.price || "",
+      is_featured: product.is_featured,
+      is_active: product.is_active,
+    });
+    setImageFile(null);
+
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }
+
+  function resetForm() {
+    setEditingProduct(null);
+    setForm(emptyForm);
+    setImageFile(null);
+  }
+
   async function deleteProduct(id: string) {
-    const confirmed = confirm("Delete this product?");
+    const confirmed = confirm(
+      "Permanently delete this product? This action cannot be undone."
+    );
+
     if (!confirmed) return;
 
     const { error } = await supabase
@@ -148,7 +196,16 @@ export default function AdminProductsPage() {
       return;
     }
 
+    if (viewingProduct?.id === id) {
+      setViewingProduct(null);
+    }
+
+    if (editingProduct?.id === id) {
+      resetForm();
+    }
+
     fetchProducts();
+    alert("Product permanently deleted.");
   }
 
   async function logout() {
@@ -183,7 +240,11 @@ export default function AdminProductsPage() {
         </div>
       </div>
 
-      <form onSubmit={addProduct} style={formBox}>
+      <form ref={formRef} onSubmit={saveProduct} style={formBox}>
+        <h2 style={sectionTitle}>
+          {editingProduct ? "Edit Product" : "Add Product"}
+        </h2>
+
         <input
           placeholder="Product title"
           value={form.title}
@@ -224,6 +285,12 @@ export default function AdminProductsPage() {
           style={input}
         />
 
+        {editingProduct?.image_url ? (
+          <p style={helpText}>
+            Current image will remain unless you upload a new one.
+          </p>
+        ) : null}
+
         <label style={checkLabel}>
           <input
             type="checkbox"
@@ -233,6 +300,9 @@ export default function AdminProductsPage() {
             }
           />
           Featured product
+          <span style={helpText}>
+            Highlight this product later on the homepage or featured section.
+          </span>
         </label>
 
         <label style={checkLabel}>
@@ -244,36 +314,138 @@ export default function AdminProductsPage() {
             }
           />
           Active
+          <span style={helpText}>
+            Active products show on the public catalogue. Inactive products stay
+            hidden.
+          </span>
         </label>
 
-        <button type="submit" disabled={saving} style={button}>
-          {saving ? "Saving..." : "Add Product"}
-        </button>
+        <div style={formActions}>
+          <button type="submit" disabled={saving} style={button}>
+            {saving
+              ? "Saving..."
+              : editingProduct
+              ? "Update Product"
+              : "Add Product"}
+          </button>
+
+          {editingProduct ? (
+            <button type="button" onClick={resetForm} style={secondaryButton}>
+              Cancel Edit
+            </button>
+          ) : null}
+        </div>
       </form>
 
       <section style={grid}>
         {products.map((product) => (
           <div key={product.id} style={card}>
-            {product.image_url && (
+            {product.image_url ? (
               <img src={product.image_url} alt={product.title} style={image} />
+            ) : (
+              <div style={imagePlaceholder}>No Image</div>
             )}
 
             <div style={cardBody}>
+              <div style={badgeRow}>
+                {product.is_featured ? (
+                  <span style={featuredBadge}>Featured</span>
+                ) : null}
+
+                <span
+                  style={product.is_active ? activeBadge : inactiveBadge}
+                >
+                  {product.is_active ? "Active" : "Hidden"}
+                </span>
+              </div>
+
               <h3>{product.title}</h3>
               <p>{product.category}</p>
-              <strong>{product.price}</strong>
+              <strong>{product.price || "Quote Required"}</strong>
               <p>{product.description}</p>
 
-              <button
-                onClick={() => deleteProduct(product.id)}
-                style={deleteButton}
-              >
-                Delete
-              </button>
+              <div style={actionRow}>
+                <button
+                  onClick={() => setViewingProduct(product)}
+                  style={secondaryButton}
+                >
+                  View
+                </button>
+
+                <button onClick={() => startEdit(product)} style={button}>
+                  Edit
+                </button>
+
+                <button
+                  onClick={() => deleteProduct(product.id)}
+                  style={deleteButton}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         ))}
       </section>
+
+      {viewingProduct ? (
+        <div style={modalOverlay} onClick={() => setViewingProduct(null)}>
+          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setViewingProduct(null)}
+              style={modalClose}
+            >
+              ×
+            </button>
+
+            {viewingProduct.image_url ? (
+              <img
+                src={viewingProduct.image_url}
+                alt={viewingProduct.title}
+                style={modalImage}
+              />
+            ) : null}
+
+            <div style={modalContent}>
+              <p style={text}>{viewingProduct.category}</p>
+              <h2 style={modalTitle}>{viewingProduct.title}</h2>
+              <p>
+                <strong>{viewingProduct.price || "Quote Required"}</strong>
+              </p>
+              <p style={text}>{viewingProduct.description}</p>
+
+              <div style={badgeRow}>
+                {viewingProduct.is_featured ? (
+                  <span style={featuredBadge}>Featured</span>
+                ) : null}
+
+                <span
+                  style={viewingProduct.is_active ? activeBadge : inactiveBadge}
+                >
+                  {viewingProduct.is_active ? "Active" : "Hidden"}
+                </span>
+              </div>
+
+              <div style={actionRow}>
+                <button
+                  onClick={() => startEdit(viewingProduct)}
+                  style={button}
+                >
+                  Edit Product
+                </button>
+
+                <button
+                  onClick={() => deleteProduct(viewingProduct.id)}
+                  style={deleteButton}
+                >
+                  Delete Permanently
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -304,8 +476,19 @@ const title: React.CSSProperties = {
   marginBottom: "10px",
 };
 
+const sectionTitle: React.CSSProperties = {
+  fontSize: "24px",
+  margin: 0,
+};
+
 const text: React.CSSProperties = {
   color: "#6C5A45",
+};
+
+const helpText: React.CSSProperties = {
+  color: "#7A5A28",
+  fontSize: "12px",
+  marginLeft: "8px",
 };
 
 const formBox: React.CSSProperties = {
@@ -334,13 +517,20 @@ const checkLabel: React.CSSProperties = {
   display: "flex",
   gap: "10px",
   alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const formActions: React.CSSProperties = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
 };
 
 const button: React.CSSProperties = {
   background: "#14110D",
   color: "#C8A96A",
   border: "none",
-  padding: "14px 20px",
+  padding: "12px 16px",
   cursor: "pointer",
   fontWeight: 700,
 };
@@ -371,14 +561,113 @@ const image: React.CSSProperties = {
   objectFit: "cover",
 };
 
+const imagePlaceholder: React.CSSProperties = {
+  height: "220px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#E8DDC9",
+  color: "#7A5A28",
+};
+
 const cardBody: React.CSSProperties = {
   padding: "18px",
+};
+
+const badgeRow: React.CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+  marginBottom: "10px",
+};
+
+const featuredBadge: React.CSSProperties = {
+  background: "#C8A96A",
+  color: "#14110D",
+  padding: "5px 9px",
+  fontSize: "11px",
+  fontWeight: 700,
+};
+
+const activeBadge: React.CSSProperties = {
+  background: "#1F6B3A",
+  color: "white",
+  padding: "5px 9px",
+  fontSize: "11px",
+  fontWeight: 700,
+};
+
+const inactiveBadge: React.CSSProperties = {
+  background: "#7A1F1F",
+  color: "white",
+  padding: "5px 9px",
+  fontSize: "11px",
+  fontWeight: 700,
+};
+
+const actionRow: React.CSSProperties = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginTop: "14px",
 };
 
 const deleteButton: React.CSSProperties = {
   background: "#151212",
   color: "white",
   border: "none",
-  padding: "10px 14px",
+  padding: "12px 16px",
   cursor: "pointer",
+  fontWeight: 700,
+};
+
+const modalOverlay: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(20,17,13,0.78)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "24px",
+  zIndex: 1000,
+};
+
+const modalCard: React.CSSProperties = {
+  width: "100%",
+  maxWidth: "760px",
+  maxHeight: "90vh",
+  overflowY: "auto",
+  background: "#FFF9EF",
+  border: "1px solid #D8C29B",
+  position: "relative",
+};
+
+const modalClose: React.CSSProperties = {
+  position: "absolute",
+  top: "12px",
+  right: "12px",
+  width: "36px",
+  height: "36px",
+  border: "none",
+  background: "#14110D",
+  color: "#C8A96A",
+  fontSize: "24px",
+  cursor: "pointer",
+};
+
+const modalImage: React.CSSProperties = {
+  width: "100%",
+  maxHeight: "460px",
+  objectFit: "contain",
+  background: "#17130E",
+  display: "block",
+};
+
+const modalContent: React.CSSProperties = {
+  padding: "24px",
+};
+
+const modalTitle: React.CSSProperties = {
+  fontSize: "30px",
+  margin: "0 0 10px",
 };
