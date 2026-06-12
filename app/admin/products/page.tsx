@@ -42,6 +42,7 @@ export default function AdminProductsPage() {
   const [saving, setSaving] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -85,11 +86,10 @@ export default function AdminProductsPage() {
     const fileName = `${Date.now()}-${Math.random()
       .toString(36)
       .substring(2)}.${fileExt}`;
-    const filePath = fileName;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("tombstone-products")
-      .upload(filePath, imageFile, {
+      .upload(fileName, imageFile, {
         cacheControl: "3600",
         upsert: false,
       });
@@ -106,10 +106,6 @@ export default function AdminProductsPage() {
       .from("tombstone-products")
       .getPublicUrl(uploadData.path);
 
-    if (!data.publicUrl) {
-      throw new Error("Could not generate public image URL.");
-    }
-
     return data.publicUrl;
   }
 
@@ -119,8 +115,6 @@ export default function AdminProductsPage() {
 
     try {
       const uploadedImageUrl = await uploadImage();
-
-      console.log("Uploaded image URL:", uploadedImageUrl);
 
       if (editingProduct) {
         const { error } = await supabase
@@ -173,6 +167,7 @@ export default function AdminProductsPage() {
   function startEdit(product: Product) {
     setEditingProduct(product);
     setViewingProduct(null);
+    setZoom(1);
 
     setForm({
       title: product.title,
@@ -196,6 +191,16 @@ export default function AdminProductsPage() {
     setImageFile(null);
   }
 
+  function openView(product: Product) {
+    setViewingProduct(product);
+    setZoom(1);
+  }
+
+  function closeView() {
+    setViewingProduct(null);
+    setZoom(1);
+  }
+
   async function deleteProduct(id: string) {
     const confirmed = confirm(
       "Permanently delete this product? This action cannot be undone."
@@ -213,13 +218,8 @@ export default function AdminProductsPage() {
       return;
     }
 
-    if (viewingProduct?.id === id) {
-      setViewingProduct(null);
-    }
-
-    if (editingProduct?.id === id) {
-      resetForm();
-    }
+    if (viewingProduct?.id === id) closeView();
+    if (editingProduct?.id === id) resetForm();
 
     fetchProducts();
     alert("Product permanently deleted.");
@@ -302,9 +302,7 @@ export default function AdminProductsPage() {
           style={input}
         />
 
-        {imageFile ? (
-          <p style={helpText}>Selected image: {imageFile.name}</p>
-        ) : null}
+        {imageFile ? <p style={helpText}>Selected image: {imageFile.name}</p> : null}
 
         {editingProduct?.image_url ? (
           <p style={helpText}>
@@ -322,8 +320,7 @@ export default function AdminProductsPage() {
           />
           <strong>Featured product</strong>
           <span style={helpText}>
-            Use this when you want to highlight a product later on the homepage
-            or in a featured tombstones section.
+            Use this to highlight a product later on the homepage.
           </span>
         </label>
 
@@ -337,8 +334,8 @@ export default function AdminProductsPage() {
           />
           <strong>Active</strong>
           <span style={helpText}>
-            Active products show on the public catalogue. If unticked, the
-            product stays in admin but is hidden from customers.
+            Active products show on the public catalogue. Inactive products stay
+            hidden.
           </span>
         </label>
 
@@ -363,7 +360,21 @@ export default function AdminProductsPage() {
         {products.map((product) => (
           <div key={product.id} style={card}>
             {product.image_url ? (
-              <img src={product.image_url} alt={product.title} style={image} />
+              <button
+                type="button"
+                onClick={() => openView(product)}
+                style={imageButton}
+                onMouseEnter={(e) => {
+                  const img = e.currentTarget.querySelector("img");
+                  if (img) img.style.transform = "scale(1.08)";
+                }}
+                onMouseLeave={(e) => {
+                  const img = e.currentTarget.querySelector("img");
+                  if (img) img.style.transform = "scale(1)";
+                }}
+              >
+                <img src={product.image_url} alt={product.title} style={image} />
+              </button>
             ) : (
               <div style={imagePlaceholder}>No Image</div>
             )}
@@ -385,10 +396,7 @@ export default function AdminProductsPage() {
               <p>{product.description}</p>
 
               <div style={actionRow}>
-                <button
-                  onClick={() => setViewingProduct(product)}
-                  style={secondaryButton}
-                >
+                <button onClick={() => openView(product)} style={secondaryButton}>
                   View
                 </button>
 
@@ -409,22 +417,44 @@ export default function AdminProductsPage() {
       </section>
 
       {viewingProduct ? (
-        <div style={modalOverlay} onClick={() => setViewingProduct(null)}>
+        <div style={modalOverlay} onClick={closeView}>
           <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => setViewingProduct(null)}
-              style={modalClose}
-            >
+            <button type="button" onClick={closeView} style={modalClose}>
               ×
             </button>
 
             {viewingProduct.image_url ? (
-              <img
-                src={viewingProduct.image_url}
-                alt={viewingProduct.title}
-                style={modalImage}
-              />
+              <>
+                <div style={zoomControls}>
+                  <button
+                    type="button"
+                    onClick={() => setZoom((value) => Math.min(value + 0.2, 2))}
+                    style={zoomButton}
+                  >
+                    Zoom In
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setZoom((value) => Math.max(value - 0.2, 1))}
+                    style={zoomButton}
+                  >
+                    Zoom Out
+                  </button>
+
+                  <button type="button" onClick={() => setZoom(1)} style={zoomButton}>
+                    Reset
+                  </button>
+                </div>
+
+                <div style={modalImageWrap}>
+                  <img
+                    src={viewingProduct.image_url}
+                    alt={viewingProduct.title}
+                    style={{ ...modalImage, transform: `scale(${zoom})` }}
+                  />
+                </div>
+              </>
             ) : (
               <div style={modalNoImage}>No Image</div>
             )}
@@ -448,10 +478,7 @@ export default function AdminProductsPage() {
               </div>
 
               <div style={actionRow}>
-                <button
-                  onClick={() => startEdit(viewingProduct)}
-                  style={button}
-                >
+                <button onClick={() => startEdit(viewingProduct)} style={button}>
                   Edit Product
                 </button>
 
@@ -566,23 +593,39 @@ const secondaryButton: React.CSSProperties = {
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-  gap: "20px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: "24px",
 };
 
 const card: React.CSSProperties = {
   background: "#FFF9EF",
   border: "1px solid #D8C29B",
+  overflow: "hidden",
+  boxShadow: "0 12px 25px rgba(0,0,0,0.06)",
+};
+
+const imageButton: React.CSSProperties = {
+  width: "100%",
+  height: "260px",
+  padding: 0,
+  border: "none",
+  background: "#E8DDC9",
+  cursor: "zoom-in",
+  overflow: "hidden",
+  display: "block",
 };
 
 const image: React.CSSProperties = {
   width: "100%",
-  height: "220px",
-  objectFit: "cover",
+  height: "100%",
+  objectFit: "contain",
+  background: "#E8DDC9",
+  display: "block",
+  transition: "transform 0.35s ease",
 };
 
 const imagePlaceholder: React.CSSProperties = {
-  height: "220px",
+  height: "260px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -654,7 +697,7 @@ const modalOverlay: React.CSSProperties = {
 
 const modalCard: React.CSSProperties = {
   width: "100%",
-  maxWidth: "760px",
+  maxWidth: "860px",
   maxHeight: "90vh",
   overflowY: "auto",
   background: "#FFF9EF",
@@ -673,14 +716,48 @@ const modalClose: React.CSSProperties = {
   color: "#C8A96A",
   fontSize: "24px",
   cursor: "pointer",
+  zIndex: 3,
+};
+
+const zoomControls: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 2,
+  display: "flex",
+  gap: "8px",
+  justifyContent: "center",
+  flexWrap: "wrap",
+  padding: "12px",
+  background: "#17130E",
+};
+
+const zoomButton: React.CSSProperties = {
+  background: "#C8A96A",
+  color: "#14110D",
+  border: "none",
+  padding: "9px 12px",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: "12px",
+};
+
+const modalImageWrap: React.CSSProperties = {
+  width: "100%",
+  height: "520px",
+  overflow: "auto",
+  background: "#17130E",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const modalImage: React.CSSProperties = {
-  width: "100%",
-  maxHeight: "460px",
+  maxWidth: "100%",
+  maxHeight: "100%",
   objectFit: "contain",
-  background: "#17130E",
   display: "block",
+  transition: "transform 0.25s ease",
+  transformOrigin: "center center",
 };
 
 const modalNoImage: React.CSSProperties = {
