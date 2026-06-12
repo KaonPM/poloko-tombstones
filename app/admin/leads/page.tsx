@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Lead = {
@@ -37,18 +38,28 @@ const leadStatuses = [
 ];
 
 export default function AdminLeadsPage() {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [password, setPassword] = useState("");
+  const router = useRouter();
+
+  const [checking, setChecking] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
 
-  function login() {
-    if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-      setLoggedIn(true);
-      fetchLeads();
-    } else {
-      alert("Incorrect password.");
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  async function checkSession() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.push("/admin/login");
+      return;
     }
+
+    setChecking(false);
+    fetchLeads();
   }
 
   async function fetchLeads() {
@@ -103,25 +114,15 @@ export default function AdminLeadsPage() {
     fetchLeads();
   }
 
-  if (!loggedIn) {
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/admin/login");
+  }
+
+  if (checking) {
     return (
       <main style={page}>
-        <div style={loginBox}>
-          <h1 style={title}>Poloko Admin</h1>
-          <p style={text}>Enter admin password to manage quote requests.</p>
-
-          <input
-            type="password"
-            placeholder="Admin password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={input}
-          />
-
-          <button onClick={login} style={button}>
-            Login
-          </button>
-        </div>
+        <p style={text}>Checking admin access...</p>
       </main>
     );
   }
@@ -134,9 +135,19 @@ export default function AdminLeadsPage() {
           <p style={text}>Track customer interest and prepare quotes.</p>
         </div>
 
-        <button onClick={fetchLeads} style={button}>
-          Refresh
-        </button>
+        <div style={headerActions}>
+          <button onClick={() => router.push("/admin")} style={secondaryButton}>
+            Dashboard
+          </button>
+
+          <button onClick={fetchLeads} style={button}>
+            Refresh
+          </button>
+
+          <button onClick={logout} style={deleteButton}>
+            Logout
+          </button>
+        </div>
       </div>
 
       {loading ? <p style={text}>Loading quote requests...</p> : null}
@@ -199,7 +210,7 @@ export default function AdminLeadsPage() {
               </select>
 
               <button
-                style={secondaryButton}
+                style={secondaryButtonFull}
                 onClick={() =>
                   alert("Quote generation will be added in the next step.")
                 }
@@ -225,20 +236,18 @@ const page: React.CSSProperties = {
   fontFamily: "Georgia, 'Times New Roman', serif",
 };
 
-const loginBox: React.CSSProperties = {
-  maxWidth: "420px",
-  margin: "80px auto",
-  background: "#FFF9EF",
-  border: "1px solid #D8C29B",
-  padding: "30px",
-};
-
 const header: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "20px",
   marginBottom: "30px",
+};
+
+const headerActions: React.CSSProperties = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
 };
 
 const title: React.CSSProperties = {
@@ -261,7 +270,7 @@ const button: React.CSSProperties = {
   background: "#14110D",
   color: "#C8A96A",
   border: "none",
-  padding: "14px 20px",
+  padding: "12px 16px",
   cursor: "pointer",
   fontWeight: 700,
 };
@@ -273,7 +282,26 @@ const secondaryButton: React.CSSProperties = {
   padding: "12px 16px",
   cursor: "pointer",
   fontWeight: 700,
+};
+
+const secondaryButtonFull: React.CSSProperties = {
+  background: "#C8A96A",
+  color: "#14110D",
+  border: "none",
+  padding: "12px 16px",
+  cursor: "pointer",
+  fontWeight: 700,
   marginTop: "12px",
+  width: "100%",
+};
+
+const deleteButton: React.CSSProperties = {
+  background: "#151212",
+  color: "white",
+  border: "none",
+  padding: "12px 16px",
+  cursor: "pointer",
+  fontWeight: 700,
 };
 
 const grid: React.CSSProperties = {
