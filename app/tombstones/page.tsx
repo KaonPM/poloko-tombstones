@@ -15,6 +15,7 @@ type Product = {
 
 export default function TombstonesPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,7 +54,17 @@ export default function TombstonesPage() {
           {products.map((product) => (
             <article key={product.id} style={card}>
               {product.image_url ? (
-                <img src={product.image_url} alt={product.title} style={image} />
+                <button
+                  type="button"
+                  onClick={() => setSelectedProduct(product)}
+                  style={imageButton}
+                >
+                  <img
+                    src={product.image_url}
+                    alt={product.title}
+                    style={image}
+                  />
+                </button>
               ) : (
                 <div style={imagePlaceholder}>No Image</div>
               )}
@@ -75,6 +86,44 @@ export default function TombstonesPage() {
           ))}
         </section>
       )}
+
+      {selectedProduct ? (
+        <div style={modalOverlay} onClick={() => setSelectedProduct(null)}>
+          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedProduct(null)}
+              style={closeButton}
+            >
+              ×
+            </button>
+
+            {selectedProduct.image_url ? (
+              <img
+                src={selectedProduct.image_url}
+                alt={selectedProduct.title}
+                style={modalImage}
+              />
+            ) : null}
+
+            <div style={modalContent}>
+              <p style={category}>{selectedProduct.category}</p>
+              <h2 style={modalTitle}>{selectedProduct.title}</h2>
+              <p style={price}>{selectedProduct.price || "Quote Required"}</p>
+              <p style={description}>{selectedProduct.description}</p>
+
+              <Link
+                href={`/#contact?product=${encodeURIComponent(
+                  selectedProduct.title
+                )}`}
+                style={button}
+              >
+                Request Quote
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div style={backWrapper}>
         <Link href="/" style={backButton}>
@@ -142,6 +191,14 @@ const card: React.CSSProperties = {
   overflow: "hidden",
 };
 
+const imageButton: React.CSSProperties = {
+  width: "100%",
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  cursor: "zoom-in",
+};
+
 const image: React.CSSProperties = {
   width: "100%",
   height: "230px",
@@ -197,6 +254,58 @@ const button: React.CSSProperties = {
   letterSpacing: "3px",
   textTransform: "uppercase",
   fontSize: "12px",
+};
+
+const modalOverlay: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(20,17,13,0.75)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "24px",
+  zIndex: 1000,
+};
+
+const modalCard: React.CSSProperties = {
+  position: "relative",
+  width: "100%",
+  maxWidth: "760px",
+  maxHeight: "90vh",
+  overflowY: "auto",
+  background: "#FFF9EF",
+  border: "1px solid #D8C29B",
+};
+
+const closeButton: React.CSSProperties = {
+  position: "absolute",
+  top: "12px",
+  right: "12px",
+  width: "36px",
+  height: "36px",
+  border: "none",
+  background: "#14110D",
+  color: "#C8A96A",
+  cursor: "pointer",
+  fontSize: "24px",
+  zIndex: 2,
+};
+
+const modalImage: React.CSSProperties = {
+  width: "100%",
+  maxHeight: "520px",
+  objectFit: "contain",
+  background: "#17130E",
+  display: "block",
+};
+
+const modalContent: React.CSSProperties = {
+  padding: "24px",
+};
+
+const modalTitle: React.CSSProperties = {
+  fontSize: "30px",
+  margin: "0 0 8px",
 };
 
 const loadingText: React.CSSProperties = {
