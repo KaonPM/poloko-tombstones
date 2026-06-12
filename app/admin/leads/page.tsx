@@ -210,10 +210,10 @@ export default function AdminLeadsPage() {
               </select>
 
               <button
-              style={secondaryButtonFull}
-              onClick={() => router.push(`/admin/quotes?lead=${lead.id}`)}
->
-              Generate Quote
+                style={secondaryButtonFull}
+                onClick={() => router.push(`/admin/quotes?lead=${lead.id}`)}
+              >
+                Generate Quote
               </button>
             </div>
           );
