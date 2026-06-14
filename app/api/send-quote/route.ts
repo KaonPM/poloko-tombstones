@@ -9,10 +9,33 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+type SelectedProduct = {
+  id: string;
+  title: string;
+  price: string | null;
+  image_url: string | null;
+  category: string;
+};
+
 export async function POST(request: Request) {
   try {
-    const { name, phone, email, service, message, productId } =
-      await request.json();
+    const {
+      name,
+      phone,
+      email,
+      service,
+      message,
+      productId,
+      selectedProduct,
+    }: {
+      name: string;
+      phone: string;
+      email?: string;
+      service: string;
+      message: string;
+      productId?: string;
+      selectedProduct?: SelectedProduct | null;
+    } = await request.json();
 
     if (!name || !phone || !service || !message) {
       return NextResponse.json(
@@ -20,6 +43,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const finalProductId = productId || selectedProduct?.id || null;
 
     const { data: customer, error: customerError } = await supabaseAdmin
       .from("poloko_customers")
@@ -42,7 +67,7 @@ export async function POST(request: Request) {
 
     const { error: leadError } = await supabaseAdmin.from("poloko_leads").insert({
       customer_id: customer.id,
-      product_id: productId || null,
+      product_id: finalProductId,
       interest_type: service,
       message,
       source: "Website",
@@ -57,6 +82,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const selectedProductText = selectedProduct
+      ? `
+Selected Tombstone:
+Name: ${selectedProduct.title}
+Category: ${selectedProduct.category}
+Price: ${selectedProduct.price || "Quote Required"}
+Image: ${selectedProduct.image_url || "No image available"}
+`
+      : "";
+
     await resend.emails.send({
       from: "Poloko Tombstones <info@polokotombstones.co.za>",
       to: ["info@polokotombstones.co.za"],
@@ -70,6 +105,7 @@ Phone / WhatsApp: ${phone}
 Email: ${email || "Not provided"}
 Product of Interest: ${service}
 
+${selectedProductText}
 Message / Requirements:
 ${message}
       `,
@@ -90,6 +126,13 @@ We have received your quote request and our team will review the details you sub
 Your request details:
 
 Product of Interest: ${service}
+${
+  selectedProduct
+    ? `Selected Tombstone: ${selectedProduct.title}
+Price: ${selectedProduct.price || "Quote Required"}
+`
+    : ""
+}
 Phone / WhatsApp: ${phone}
 
 Message:
