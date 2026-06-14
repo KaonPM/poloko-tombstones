@@ -19,12 +19,15 @@ type Product = {
   created_at: string | null;
 };
 
+type SortOption = "featured" | "price-high" | "price-low" | "newest";
+
 export default function TombstonesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [sortBy, setSortBy] = useState<SortOption>("featured");
   const catalogueRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -32,6 +35,40 @@ export default function TombstonesPage() {
   }, []);
 
   const sortedProducts = useMemo(() => {
+    return [...products].sort((a, b) => {
+      if (sortBy === "price-high") {
+        return getPriceValue(b.price) - getPriceValue(a.price);
+      }
+
+      if (sortBy === "price-low") {
+        return getPriceValue(a.price) - getPriceValue(b.price);
+      }
+
+      if (sortBy === "newest") {
+        return (
+          new Date(b.created_at || "").getTime() -
+          new Date(a.created_at || "").getTime()
+        );
+      }
+
+      const featuredA = a.is_featured ? 1 : 0;
+      const featuredB = b.is_featured ? 1 : 0;
+
+      if (featuredA !== featuredB) return featuredB - featuredA;
+
+      const orderA = a.display_order ?? 9999;
+      const orderB = b.display_order ?? 9999;
+
+      if (orderA !== orderB) return orderA - orderB;
+
+      return (
+        new Date(b.created_at || "").getTime() -
+        new Date(a.created_at || "").getTime()
+      );
+    });
+  }, [products, sortBy]);
+
+  const catalogueProducts = useMemo(() => {
     return [...products].sort((a, b) => {
       const featuredA = a.is_featured ? 1 : 0;
       const featuredB = b.is_featured ? 1 : 0;
@@ -50,7 +87,7 @@ export default function TombstonesPage() {
     });
   }, [products]);
 
-  const productPages = chunkProducts(sortedProducts, 4);
+  const productPages = chunkProducts(catalogueProducts, 4);
 
   function openProduct(product: Product) {
     setSelectedProduct(product);
@@ -78,7 +115,7 @@ export default function TombstonesPage() {
   }
 
   async function downloadCatalogue() {
-    if (!catalogueRef.current || sortedProducts.length === 0) return;
+    if (!catalogueRef.current || catalogueProducts.length === 0) return;
 
     setDownloading(true);
 
@@ -93,7 +130,7 @@ export default function TombstonesPage() {
           scale: 2,
           useCORS: true,
           allowTaint: false,
-          backgroundColor: index === 0 ? "#14110D" : "#F4EFE6",
+          backgroundColor: "#F4EFE6",
         });
 
         const imageData = canvas.toDataURL("image/jpeg", 0.95);
@@ -123,21 +160,35 @@ export default function TombstonesPage() {
           Browse our tombstone range and request a personalised quote.
         </p>
 
-        <button
-          type="button"
-          onClick={downloadCatalogue}
-          disabled={downloading || loading || sortedProducts.length === 0}
-          style={{
-            ...downloadButton,
-            opacity: downloading || loading || sortedProducts.length === 0 ? 0.6 : 1,
-            cursor:
-              downloading || loading || sortedProducts.length === 0
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          {downloading ? "Preparing Catalogue..." : "Download Catalogue"}
-        </button>
+        <div style={toolbar}>
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as SortOption)}
+            style={select}
+          >
+            <option value="featured">Featured</option>
+            <option value="price-high">Price: High to Low</option>
+            <option value="price-low">Price: Low to High</option>
+            <option value="newest">Newest First</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={downloadCatalogue}
+            disabled={downloading || loading || catalogueProducts.length === 0}
+            style={{
+              ...downloadButton,
+              opacity:
+                downloading || loading || catalogueProducts.length === 0 ? 0.6 : 1,
+              cursor:
+                downloading || loading || catalogueProducts.length === 0
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            {downloading ? "Preparing Catalogue..." : "Download Catalogue"}
+          </button>
+        </div>
       </section>
 
       {loading ? (
@@ -183,7 +234,7 @@ export default function TombstonesPage() {
 
       {selectedProduct ? (
         <div style={modalOverlay} onClick={closeProduct}>
-          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+          <div style={modalCard} onClick={(event) => event.stopPropagation()}>
             <button type="button" onClick={closeProduct} style={closeButton}>
               ×
             </button>
@@ -268,24 +319,30 @@ export default function TombstonesPage() {
 
 function PdfCoverPage() {
   return (
-    <div data-pdf-page="true" style={pdfPageDark}>
+    <div data-pdf-page="true" style={pdfPageLight}>
       <div style={pdfLogoBox}>
-        <img src="/logo.png" alt="Poloko Tombstones" style={pdfLogo} />
+        <img
+          src="/poloko-tombstones-logo.png"
+          alt="Poloko Tombstones"
+          style={pdfLogo}
+        />
       </div>
 
       <div style={pdfCoverCenter}>
-        <h1 style={pdfCoverTitle}>Tombstone Catalogue</h1>
-        <p style={pdfCoverSubtitle}>A Legacy Carved in Stone</p>
+        <h1 style={pdfCoverTitleLight}>Tombstone Catalogue</h1>
+        <p style={pdfCoverSubtitleLight}>A Legacy Carved in Stone</p>
 
-        <div style={pdfPromiseGrid}>
-          <div style={pdfPromiseBox}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
-          <div style={pdfPromiseBox}>PREMIUM GRANITE TOMBSTONES</div>
-          <div style={pdfPromiseBox}>CUSTOM MEMORIAL DESIGNS</div>
-          <div style={pdfPromiseBox}>PROFESSIONAL ENGRAVING</div>
+        <div style={pdfPrintPromiseGrid}>
+          <div style={pdfPrintPromiseBox}>
+            Expert Installation Anywhere in South Africa
+          </div>
+          <div style={pdfPrintPromiseBox}>Premium Granite Tombstones</div>
+          <div style={pdfPrintPromiseBox}>Custom Memorial Designs</div>
+          <div style={pdfPrintPromiseBox}>Professional Engraving</div>
         </div>
       </div>
 
-      <div style={pdfFooterDark}>
+      <div style={pdfFooterLight}>
         <span>www.polokotombstones.co.za</span>
         <span>WhatsApp: 073 163 3836</span>
       </div>
@@ -342,7 +399,10 @@ function PdfProductPage({
             {pageNumber === 1 ? "Featured Tombstones" : "Tombstone Designs"}
           </h2>
         </div>
-        <div style={pdfInstallBadge}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
+
+        <div style={pdfInstallBadge}>
+          EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA
+        </div>
       </div>
 
       <div style={pdfProductGrid}>
@@ -386,20 +446,22 @@ function PdfProductPage({
 
 function PdfContactPage() {
   return (
-    <div data-pdf-page="true" style={pdfPageDark}>
+    <div data-pdf-page="true" style={pdfPageLight}>
       <p style={pdfSmallGold}>CONTACT US</p>
-      <h2 style={pdfSectionTitleDark}>Request a Quote</h2>
+      <h2 style={pdfSectionTitle}>Request a Quote</h2>
 
       <div style={pdfContactGrid}>
-        <div style={pdfContactBox}>
-          <h3>Garanuwa Branch</h3>
+        <div style={pdfContactBoxLight}>
+          <h3>Garankuwa Branch</h3>
+          <p>750 Zone 7</p>
           <p>082 391 5772</p>
           <p>073 163 3836</p>
           <p>063 664 4824</p>
         </div>
 
-        <div style={pdfContactBox}>
+        <div style={pdfContactBoxLight}>
           <h3>Ganyesa Branch</h3>
+          <p>Phohung Section</p>
           <p>082 391 5772</p>
           <p>083 928 0868</p>
           <p>072 736 3463</p>
@@ -408,7 +470,7 @@ function PdfContactPage() {
 
       <div style={pdfGoldBanner}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
 
-      <div style={pdfFooterDark}>
+      <div style={pdfFooterLight}>
         <span>www.polokotombstones.co.za</span>
         <span>info@polokotombstones.co.za</span>
       </div>
@@ -424,6 +486,15 @@ function chunkProducts(products: Product[], size: number) {
   }
 
   return chunks;
+}
+
+function getPriceValue(price: string | null) {
+  if (!price) return 0;
+
+  const cleaned = price.replace(/[^\d.]/g, "");
+  const value = Number(cleaned);
+
+  return Number.isNaN(value) ? 0 : value;
 }
 
 const page: React.CSSProperties = {
@@ -468,8 +539,27 @@ const subtitle: React.CSSProperties = {
   lineHeight: 1.7,
 };
 
-const downloadButton: React.CSSProperties = {
+const toolbar: React.CSSProperties = {
   marginTop: "22px",
+  display: "flex",
+  justifyContent: "center",
+  gap: "12px",
+  flexWrap: "wrap",
+};
+
+const select: React.CSSProperties = {
+  background: "#FFF9EF",
+  color: "#17130E",
+  border: "1px solid #C8A96A",
+  padding: "13px 16px",
+  fontSize: "12px",
+  fontWeight: 700,
+  letterSpacing: "2px",
+  textTransform: "uppercase",
+  outline: "none",
+};
+
+const downloadButton: React.CSSProperties = {
   background: "#14110D",
   color: "#C8A96A",
   border: "1px solid #C8A96A",
@@ -675,17 +765,6 @@ const pdfWrapper: React.CSSProperties = {
   zIndex: -1,
 };
 
-const pdfPageDark: React.CSSProperties = {
-  width: "794px",
-  height: "1123px",
-  background: "#14110D",
-  color: "#F8EFE0",
-  padding: "58px",
-  boxSizing: "border-box",
-  fontFamily: "Georgia, 'Times New Roman', serif",
-  position: "relative",
-};
-
 const pdfPageLight: React.CSSProperties = {
   width: "794px",
   height: "1123px",
@@ -713,45 +792,35 @@ const pdfCoverCenter: React.CSSProperties = {
   textAlign: "center",
 };
 
-const pdfCoverTitle: React.CSSProperties = {
+const pdfCoverTitleLight: React.CSSProperties = {
   fontSize: "58px",
   lineHeight: 1.05,
   margin: 0,
-  color: "#F8EFE0",
+  color: "#17130E",
 };
 
-const pdfCoverSubtitle: React.CSSProperties = {
+const pdfCoverSubtitleLight: React.CSSProperties = {
   fontSize: "25px",
-  color: "#C8A96A",
+  color: "#C08A18",
   marginTop: "18px",
 };
 
-const pdfPromiseGrid: React.CSSProperties = {
+const pdfPrintPromiseGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: "14px",
   marginTop: "70px",
 };
 
-const pdfPromiseBox: React.CSSProperties = {
-  border: "1px solid #C8A96A",
-  color: "#C8A96A",
-  padding: "18px",
-  fontSize: "14px",
+const pdfPrintPromiseBox: React.CSSProperties = {
+  border: "1px solid #D8C29B",
+  background: "#FFF9EF",
+  color: "#17130E",
+  padding: "20px",
+  fontSize: "16px",
   fontWeight: 700,
-  letterSpacing: "2px",
+  textAlign: "center",
   lineHeight: 1.4,
-};
-
-const pdfFooterDark: React.CSSProperties = {
-  position: "absolute",
-  bottom: "42px",
-  left: "58px",
-  right: "58px",
-  display: "flex",
-  justifyContent: "space-between",
-  color: "#C8A96A",
-  fontSize: "14px",
 };
 
 const pdfFooterLight: React.CSSProperties = {
@@ -777,12 +846,6 @@ const pdfSectionTitle: React.CSSProperties = {
   fontSize: "48px",
   margin: "0 0 38px",
   color: "#17130E",
-};
-
-const pdfSectionTitleDark: React.CSSProperties = {
-  fontSize: "48px",
-  margin: "0 0 38px",
-  color: "#F8EFE0",
 };
 
 const pdfServicesGrid: React.CSSProperties = {
@@ -922,9 +985,10 @@ const pdfContactGrid: React.CSSProperties = {
   marginTop: "60px",
 };
 
-const pdfContactBox: React.CSSProperties = {
-  border: "1px solid #C8A96A",
+const pdfContactBoxLight: React.CSSProperties = {
+  border: "1px solid #D8C29B",
+  background: "#FFF9EF",
   padding: "24px",
-  color: "#F8EFE0",
+  color: "#17130E",
   fontSize: "20px",
 };
