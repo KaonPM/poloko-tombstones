@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -24,6 +24,8 @@ type Lead = {
         title: string;
         category: string;
         price: string | null;
+        image_url: string | null;
+        product_code: string | null;
       }[]
     | null;
 };
@@ -31,10 +33,11 @@ type Lead = {
 const leadStatuses = [
   "New",
   "Contacted",
-  "Quoted",
-  "Follow-up",
-  "Converted",
+  "Quote Sent",
+  "Negotiating",
+  "Won",
   "Lost",
+  "Installed",
 ];
 
 export default function AdminLeadsPage() {
@@ -43,6 +46,8 @@ export default function AdminLeadsPage() {
   const [checking, setChecking] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     checkSession();
@@ -84,7 +89,9 @@ export default function AdminLeadsPage() {
         product:tombstone_products (
           title,
           category,
-          price
+          price,
+          image_url,
+          product_code
         )
       `
       )
@@ -111,13 +118,50 @@ export default function AdminLeadsPage() {
       return;
     }
 
-    fetchLeads();
+    setLeads((current) =>
+      current.map((lead) => (lead.id === id ? { ...lead, status } : lead))
+    );
   }
 
   async function logout() {
     await supabase.auth.signOut();
     router.push("/admin/login");
   }
+
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      const customer = lead.customer?.[0];
+      const product = lead.product?.[0];
+
+      const matchesStatus =
+        statusFilter === "All" || lead.status === statusFilter;
+
+      const combinedText = `
+        ${customer?.full_name || ""}
+        ${customer?.phone || ""}
+        ${customer?.email || ""}
+        ${product?.title || ""}
+        ${product?.product_code || ""}
+        ${lead.interest_type || ""}
+        ${lead.message || ""}
+      `.toLowerCase();
+
+      const matchesSearch = combinedText.includes(searchTerm.toLowerCase());
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [leads, statusFilter, searchTerm]);
+
+  const totalLeads = leads.length;
+  const newLeads = leads.filter((lead) => lead.status === "New").length;
+  const contactedLeads = leads.filter(
+    (lead) => lead.status === "Contacted"
+  ).length;
+  const quotesSent = leads.filter(
+    (lead) => lead.status === "Quote Sent"
+  ).length;
+  const wonDeals = leads.filter((lead) => lead.status === "Won").length;
+  const lostDeals = leads.filter((lead) => lead.status === "Lost").length;
 
   if (checking) {
     return (
@@ -131,8 +175,11 @@ export default function AdminLeadsPage() {
     <main style={page}>
       <div style={header}>
         <div>
-          <h1 style={title}>Quote Requests</h1>
-          <p style={text}>Track customer interest and prepare quotes.</p>
+          <h1 style={title}>Lead Management</h1>
+          <p style={text}>
+            Track quote requests, manage follow-ups, and convert enquiries into
+            sales.
+          </p>
         </div>
 
         <div style={headerActions}>
@@ -150,10 +197,62 @@ export default function AdminLeadsPage() {
         </div>
       </div>
 
+      <section style={summaryGrid}>
+        <div style={summaryCard}>
+          <p style={summaryLabel}>Total Leads</p>
+          <h2 style={summaryValue}>{totalLeads}</h2>
+        </div>
+
+        <div style={summaryCard}>
+          <p style={summaryLabel}>New</p>
+          <h2 style={summaryValue}>{newLeads}</h2>
+        </div>
+
+        <div style={summaryCard}>
+          <p style={summaryLabel}>Contacted</p>
+          <h2 style={summaryValue}>{contactedLeads}</h2>
+        </div>
+
+        <div style={summaryCard}>
+          <p style={summaryLabel}>Quotes Sent</p>
+          <h2 style={summaryValue}>{quotesSent}</h2>
+        </div>
+
+        <div style={summaryCard}>
+          <p style={summaryLabel}>Won</p>
+          <h2 style={summaryValue}>{wonDeals}</h2>
+        </div>
+
+        <div style={summaryCard}>
+          <p style={summaryLabel}>Lost</p>
+          <h2 style={summaryValue}>{lostDeals}</h2>
+        </div>
+      </section>
+
+      <section style={filterBox}>
+        <input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by customer, phone, product, product code, or message"
+          style={input}
+        />
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={input}
+        >
+          <option value="All">All Statuses</option>
+          {leadStatuses.map((status) => (
+            <option key={status}>{status}</option>
+          ))}
+        </select>
+      </section>
+
       {loading ? <p style={text}>Loading quote requests...</p> : null}
 
       <section style={grid}>
-        {leads.map((lead) => {
+        {filteredLeads.map((lead) => {
           const customer = lead.customer?.[0];
           const product = lead.product?.[0];
 
@@ -167,8 +266,18 @@ export default function AdminLeadsPage() {
                   <p style={smallText}>{lead.interest_type}</p>
                 </div>
 
-                <span style={statusBadge}>{lead.status}</span>
+                <span style={getStatusBadgeStyle(lead.status)}>
+                  {lead.status}
+                </span>
               </div>
+
+              {product?.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.title}
+                  style={productImage}
+                />
+              ) : null}
 
               <div style={details}>
                 <p>
@@ -180,7 +289,17 @@ export default function AdminLeadsPage() {
                 </p>
 
                 <p>
+                  <strong>Location:</strong>{" "}
+                  {customer?.location || "Not provided"}
+                </p>
+
+                <p>
                   <strong>Source:</strong> {lead.source || "Website"}
+                </p>
+
+                <p>
+                  <strong>Date:</strong>{" "}
+                  {new Date(lead.created_at).toLocaleDateString("en-ZA")}
                 </p>
 
                 <p>
@@ -189,6 +308,18 @@ export default function AdminLeadsPage() {
                     ? `${product.title} - ${product.price || "No price"}`
                     : "Not linked to catalogue product"}
                 </p>
+
+                {product?.product_code ? (
+                  <p>
+                    <strong>Product Code:</strong> {product.product_code}
+                  </p>
+                ) : null}
+
+                {product?.category ? (
+                  <p>
+                    <strong>Category:</strong> {product.category}
+                  </p>
+                ) : null}
 
                 <p>
                   <strong>Message:</strong>
@@ -215,16 +346,68 @@ export default function AdminLeadsPage() {
               >
                 Generate Quote
               </button>
+
+              {customer?.phone ? (
+                <a
+                  href={`https://wa.me/27${customer.phone
+                    .replace(/\D/g, "")
+                    .replace(/^0/, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={whatsappButton}
+                >
+                  WhatsApp Customer
+                </a>
+              ) : null}
             </div>
           );
         })}
       </section>
 
-      {!loading && leads.length === 0 ? (
-        <p style={text}>No quote requests found yet.</p>
+      {!loading && filteredLeads.length === 0 ? (
+        <p style={text}>No quote requests found for the selected filters.</p>
       ) : null}
     </main>
   );
+}
+
+function getStatusBadgeStyle(status: string): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: "6px 10px",
+    fontSize: "12px",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  };
+
+  if (status === "New") {
+    return { ...base, background: "#14110D", color: "#C8A96A" };
+  }
+
+  if (status === "Contacted") {
+    return { ...base, background: "#FFF3CD", color: "#6C4A00" };
+  }
+
+  if (status === "Quote Sent") {
+    return { ...base, background: "#DDEBFF", color: "#163B66" };
+  }
+
+  if (status === "Negotiating") {
+    return { ...base, background: "#EFE2FF", color: "#4B247A" };
+  }
+
+  if (status === "Won") {
+    return { ...base, background: "#DDF6E4", color: "#205C36" };
+  }
+
+  if (status === "Lost") {
+    return { ...base, background: "#F8D7DA", color: "#842029" };
+  }
+
+  if (status === "Installed") {
+    return { ...base, background: "#E8E0D1", color: "#2B241B" };
+  }
+
+  return { ...base, background: "#14110D", color: "#C8A96A" };
 }
 
 const page: React.CSSProperties = {
@@ -240,6 +423,7 @@ const header: React.CSSProperties = {
   alignItems: "flex-start",
   gap: "20px",
   marginBottom: "30px",
+  flexWrap: "wrap",
 };
 
 const headerActions: React.CSSProperties = {
@@ -302,6 +486,37 @@ const deleteButton: React.CSSProperties = {
   fontWeight: 700,
 };
 
+const summaryGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "16px",
+  marginBottom: "24px",
+};
+
+const summaryCard: React.CSSProperties = {
+  background: "#FFF9EF",
+  border: "1px solid #D8C29B",
+  padding: "18px",
+};
+
+const summaryLabel: React.CSSProperties = {
+  margin: 0,
+  color: "#6C5A45",
+  fontSize: "14px",
+};
+
+const summaryValue: React.CSSProperties = {
+  margin: "8px 0 0",
+  fontSize: "30px",
+};
+
+const filterBox: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "2fr 1fr",
+  gap: "14px",
+  marginBottom: "24px",
+};
+
 const grid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
@@ -332,14 +547,6 @@ const smallText: React.CSSProperties = {
   color: "#6C5A45",
 };
 
-const statusBadge: React.CSSProperties = {
-  background: "#14110D",
-  color: "#C8A96A",
-  padding: "6px 10px",
-  fontSize: "12px",
-  fontWeight: 700,
-};
-
 const details: React.CSSProperties = {
   color: "#2B241B",
   lineHeight: 1.6,
@@ -350,4 +557,25 @@ const messageBox: React.CSSProperties = {
   border: "1px solid #D8C29B",
   padding: "12px",
   whiteSpace: "pre-wrap",
+};
+
+const productImage: React.CSSProperties = {
+  width: "100%",
+  height: "220px",
+  objectFit: "cover",
+  border: "1px solid #D8C29B",
+  marginBottom: "16px",
+  background: "#F4EFE6",
+};
+
+const whatsappButton: React.CSSProperties = {
+  display: "block",
+  textAlign: "center",
+  background: "#1F7A3F",
+  color: "white",
+  textDecoration: "none",
+  padding: "12px 16px",
+  cursor: "pointer",
+  fontWeight: 700,
+  marginTop: "10px",
 };
