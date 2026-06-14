@@ -99,6 +99,27 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkScreen);
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const product = params.get("product");
+
+    if (!product) return;
+
+    setForm((current) => ({
+      ...current,
+      service: "New Tombstone Sales",
+      message:
+        `Product of Interest: ${product}\n\n` +
+        "Please contact me regarding pricing, design options and installation.",
+    }));
+
+    setTimeout(() => {
+      document
+        .getElementById("contact")
+        ?.scrollIntoView({ behavior: "smooth" });
+    }, 300);
+  }, []);
+
   function updateForm(
     event: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -108,7 +129,15 @@ export default function Home() {
   }
 
   function selectService(service: string) {
-    setForm({ ...form, service });
+    setForm((current) => ({
+      ...current,
+      service,
+      message:
+        service === "New Tombstone Sales"
+          ? current.message
+          : `I would like a quotation for ${service}.`,
+    }));
+
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -318,7 +347,9 @@ export default function Home() {
         <div
           style={{
             ...serviceButtonGrid,
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(240px, 1fr))",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : "repeat(auto-fit, minmax(240px, 1fr))",
           }}
         >
           {services.map((service, index) => (
@@ -348,7 +379,9 @@ export default function Home() {
         <div
           style={{
             ...catalogueGrid,
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(240px, 1fr))",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : "repeat(auto-fit, minmax(240px, 1fr))",
           }}
         >
           {catalogueItems.map((item) => (
@@ -381,7 +414,9 @@ export default function Home() {
         id="about"
         style={{
           ...aboutSection,
-          gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 0.85fr) minmax(320px, 1.15fr)",
+          gridTemplateColumns: isMobile
+            ? "1fr"
+            : "minmax(260px, 0.85fr) minmax(320px, 1.15fr)",
           padding: isMobile ? "52px 18px" : "64px 7%",
         }}
       >
@@ -430,7 +465,9 @@ export default function Home() {
           <div
             style={{
               ...storyGrid,
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(210px, 1fr))",
+              gridTemplateColumns: isMobile
+                ? "1fr"
+                : "repeat(auto-fit, minmax(210px, 1fr))",
             }}
           >
             <div style={storyCard}>

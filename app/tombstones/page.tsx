@@ -224,7 +224,8 @@ export default function TombstonesPage() {
                   href={`/#contact?product=${encodeURIComponent(product.title)}`}
                   style={button}
                 >
-                  Request Quote
+                  Request Quote For This Design
+
                 </Link>
               </div>
             </article>
@@ -286,7 +287,8 @@ export default function TombstonesPage() {
                 href={`/#contact?product=${encodeURIComponent(selectedProduct.title)}`}
                 style={button}
               >
-                Request Quote
+                Request Quote For This Design
+
               </Link>
             </div>
           </div>
