@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 type Product = {
   id: string;
@@ -11,17 +13,44 @@ type Product = {
   description: string | null;
   price: string | null;
   image_url: string | null;
+  is_featured: boolean | null;
+  product_code: string | null;
+  display_order: number | null;
+  created_at: string | null;
 };
 
 export default function TombstonesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const catalogueRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  const sortedProducts = useMemo(() => {
+    return [...products].sort((a, b) => {
+      const featuredA = a.is_featured ? 1 : 0;
+      const featuredB = b.is_featured ? 1 : 0;
+
+      if (featuredA !== featuredB) return featuredB - featuredA;
+
+      const orderA = a.display_order ?? 9999;
+      const orderB = b.display_order ?? 9999;
+
+      if (orderA !== orderB) return orderA - orderB;
+
+      return (
+        new Date(b.created_at || "").getTime() -
+        new Date(a.created_at || "").getTime()
+      );
+    });
+  }, [products]);
+
+  const productPages = chunkProducts(sortedProducts, 4);
 
   function openProduct(product: Product) {
     setSelectedProduct(product);
@@ -36,12 +65,51 @@ export default function TombstonesPage() {
   async function fetchProducts() {
     const { data, error } = await supabase
       .from("tombstone_products")
-      .select("id,title,category,description,price,image_url")
+      .select(
+        "id,title,category,description,price,image_url,is_featured,product_code,display_order,created_at"
+      )
       .eq("is_active", true)
+      .order("is_featured", { ascending: false })
+      .order("display_order", { ascending: true })
       .order("created_at", { ascending: false });
 
     if (!error) setProducts(data || []);
     setLoading(false);
+  }
+
+  async function downloadCatalogue() {
+    if (!catalogueRef.current || sortedProducts.length === 0) return;
+
+    setDownloading(true);
+
+    try {
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pages = Array.from(
+        catalogueRef.current.querySelectorAll("[data-pdf-page='true']")
+      ) as HTMLElement[];
+
+      for (let index = 0; index < pages.length; index++) {
+        const canvas = await html2canvas(pages[index], {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: "#14110D",
+        });
+
+        const imageData = canvas.toDataURL("image/jpeg", 0.95);
+
+        if (index > 0) pdf.addPage();
+
+        pdf.addImage(imageData, "JPEG", 0, 0, 210, 297);
+      }
+
+      pdf.save("Poloko-Tombstones-Catalogue.pdf");
+    } catch (error) {
+      console.error("Catalogue download failed:", error);
+      alert("Catalogue could not be downloaded. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
@@ -54,15 +122,31 @@ export default function TombstonesPage() {
         <p style={subtitle}>
           Browse our tombstone range and request a personalised quote.
         </p>
+
+        <button
+          type="button"
+          onClick={downloadCatalogue}
+          disabled={downloading || loading || sortedProducts.length === 0}
+          style={{
+            ...downloadButton,
+            opacity: downloading || loading || sortedProducts.length === 0 ? 0.6 : 1,
+            cursor:
+              downloading || loading || sortedProducts.length === 0
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          {downloading ? "Preparing Catalogue..." : "Download Catalogue"}
+        </button>
       </section>
 
       {loading ? (
         <p style={loadingText}>Loading catalogue...</p>
-      ) : products.length === 0 ? (
+      ) : sortedProducts.length === 0 ? (
         <p style={loadingText}>No products have been added yet.</p>
       ) : (
         <section style={grid}>
-          {products.map((product) => (
+          {sortedProducts.map((product) => (
             <article key={product.id} style={card}>
               {product.image_url ? (
                 <button
@@ -78,18 +162,17 @@ export default function TombstonesPage() {
                     if (img) img.style.transform = "scale(1)";
                   }}
                 >
-                  <img
-                    src={product.image_url}
-                    alt={product.title}
-                    style={image}
-                  />
+                  <img src={product.image_url} alt={product.title} style={image} />
                 </button>
               ) : (
                 <div style={imagePlaceholder}>No Image</div>
               )}
 
               <div style={content}>
-                <p style={category}>{product.category}</p>
+                <p style={category}>
+                  {product.is_featured ? "Featured · " : ""}
+                  {product.category}
+                </p>
                 <h2 style={cardTitle}>{product.title}</h2>
                 <p style={price}>{product.price || "Quote Required"}</p>
                 <p style={description}>{product.description}</p>
@@ -132,11 +215,7 @@ export default function TombstonesPage() {
                     Zoom Out
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setZoom(1)}
-                    style={zoomButton}
-                  >
+                  <button type="button" onClick={() => setZoom(1)} style={zoomButton}>
                     Reset
                   </button>
                 </div>
@@ -161,9 +240,7 @@ export default function TombstonesPage() {
               <p style={description}>{selectedProduct.description}</p>
 
               <Link
-                href={`/#contact?product=${encodeURIComponent(
-                  selectedProduct.title
-                )}`}
+                href={`/#contact?product=${encodeURIComponent(selectedProduct.title)}`}
                 style={button}
               >
                 Request Quote
@@ -173,6 +250,24 @@ export default function TombstonesPage() {
         </div>
       ) : null}
 
+      <div ref={catalogueRef} style={pdfWrapper}>
+        <PdfCoverPage />
+
+        <PdfInfoPage />
+
+        <PdfServicesPage />
+
+        {productPages.map((pageProducts, index) => (
+          <PdfProductPage
+            key={index}
+            pageNumber={index + 1}
+            products={pageProducts}
+          />
+        ))}
+
+        <PdfContactPage />
+      </div>
+
       <div style={backWrapper}>
         <Link href="/" style={backButton}>
           ← Back to Home
@@ -180,6 +275,215 @@ export default function TombstonesPage() {
       </div>
     </main>
   );
+}
+
+function PdfCoverPage() {
+  return (
+    <div data-pdf-page="true" style={pdfPage}>
+      <div style={pdfTopLine}>POLOKO TOMBSTONES</div>
+
+      <div style={pdfCoverCenter}>
+        <h1 style={pdfCoverTitle}>A Legacy Carved in Stone</h1>
+        <p style={pdfCoverSubtitle}>
+          Premium tombstones, granite craftsmanship and memorial designs for
+          families across South Africa.
+        </p>
+
+        <div style={pdfPromiseGrid}>
+          <div style={pdfPromiseBox}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
+          <div style={pdfPromiseBox}>QUALITY GRANITE CRAFTSMANSHIP</div>
+          <div style={pdfPromiseBox}>CUSTOM MEMORIAL DESIGNS</div>
+          <div style={pdfPromiseBox}>PROFESSIONAL ENGRAVING</div>
+        </div>
+      </div>
+
+      <div style={pdfFooter}>
+        <span>www.polokotombstones.co.za</span>
+        <span>WhatsApp: 073 163 3836</span>
+      </div>
+    </div>
+  );
+}
+
+function PdfInfoPage() {
+  return (
+    <div data-pdf-page="true" style={pdfPageLight}>
+      <p style={pdfSmallGold}>ABOUT POLOKO TOMBSTONES</p>
+      <h2 style={pdfSectionTitle}>Crafted With Purpose</h2>
+
+      <p style={pdfBodyText}>
+        Poloko Tombstones is built on more than 20 years of hands-on experience
+        in granite, tombstone and stone craftsmanship. We help families create
+        lasting memorials that honour loved ones with dignity, care and
+        professional workmanship.
+      </p>
+
+      <div style={pdfInfoGrid}>
+        <div style={pdfInfoCard}>
+          <h3>Premium Granite</h3>
+          <p>Strong, elegant and lasting stone products made with care.</p>
+        </div>
+        <div style={pdfInfoCard}>
+          <h3>Custom Work</h3>
+          <p>Memorial designs shaped around each family’s needs and budget.</p>
+        </div>
+        <div style={pdfInfoCard}>
+          <h3>Family Care</h3>
+          <p>Respectful service during a sensitive and important time.</p>
+        </div>
+        <div style={pdfInfoCard}>
+          <h3>Nationwide Service</h3>
+          <p>Expert installation of stone anywhere in South Africa.</p>
+        </div>
+      </div>
+
+      <div style={pdfGoldBanner}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
+    </div>
+  );
+}
+
+function PdfServicesPage() {
+  return (
+    <div data-pdf-page="true" style={pdfPage}>
+      <p style={pdfSmallGold}>OUR SERVICES</p>
+      <h2 style={pdfSectionTitleDark}>Memorial and Granite Services</h2>
+
+      <div style={pdfServicesGrid}>
+        {[
+          "New Tombstone Sales",
+          "Tombstone Repairs",
+          "Custom Memorial Designs",
+          "Professional Engraving",
+          "Granite Kitchen Tops",
+          "Quartz Kitchen Tops",
+          "Cut-to-Size Granite",
+          "Ledgers",
+        ].map((service) => (
+          <div key={service} style={pdfServiceItem}>
+            {service}
+          </div>
+        ))}
+      </div>
+
+      <p style={pdfDarkBody}>
+        Our catalogue includes selected tombstone designs available for quote.
+        Prices and designs may be confirmed with Poloko Tombstones based on
+        material, size, lettering, installation area and final customer
+        requirements.
+      </p>
+
+      <div style={pdfFooter}>
+        <span>Premium Tombstones & Granite Products</span>
+        <span>www.polokotombstones.co.za</span>
+      </div>
+    </div>
+  );
+}
+
+function PdfProductPage({
+  products,
+  pageNumber,
+}: {
+  products: Product[];
+  pageNumber: number;
+}) {
+  return (
+    <div data-pdf-page="true" style={pdfPageLight}>
+      <div style={pdfProductHeader}>
+        <div>
+          <p style={pdfSmallGold}>POLOKO COLLECTION</p>
+          <h2 style={pdfProductPageTitle}>
+            {pageNumber === 1 ? "Featured Tombstones" : "Tombstone Designs"}
+          </h2>
+        </div>
+        <div style={pdfInstallBadge}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
+      </div>
+
+      <div style={pdfProductGrid}>
+        {products.map((product) => (
+          <div key={product.id} style={pdfProductCard}>
+            <div style={pdfProductImageBox}>
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.title}
+                  crossOrigin="anonymous"
+                  style={pdfProductImage}
+                />
+              ) : (
+                <div style={pdfNoImage}>No Image</div>
+              )}
+            </div>
+
+            <div style={pdfProductContent}>
+              <p style={pdfProductCategory}>
+                {product.is_featured ? "Featured · " : ""}
+                {product.category}
+              </p>
+              <h3 style={pdfProductTitle}>{product.title}</h3>
+              <p style={pdfProductCode}>
+                Code: {product.product_code || "Available on request"}
+              </p>
+              <p style={pdfProductPrice}>{product.price || "Quote Required"}</p>
+              <p style={pdfProductDescription}>
+                {product.description || "Contact Poloko Tombstones for details."}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={pdfPageFooter}>
+        <span>Poloko Tombstones</span>
+        <span>Page {pageNumber}</span>
+      </div>
+    </div>
+  );
+}
+
+function PdfContactPage() {
+  return (
+    <div data-pdf-page="true" style={pdfPage}>
+      <p style={pdfSmallGold}>CONTACT US</p>
+      <h2 style={pdfSectionTitleDark}>Request a Quote</h2>
+
+      <p style={pdfDarkBody}>
+        Speak to Poloko Tombstones for tombstone designs, pricing, custom work,
+        repairs, granite products and professional installation.
+      </p>
+
+      <div style={pdfContactBox}>
+        <h3>Garanuwa Branch</h3>
+        <p>082 391 5772</p>
+        <p>073 163 3836</p>
+        <p>063 664 4824</p>
+      </div>
+
+      <div style={pdfContactBox}>
+        <h3>Ganyesa Branch</h3>
+        <p>082 391 5772</p>
+        <p>083 928 0868</p>
+        <p>072 736 3463</p>
+      </div>
+
+      <div style={pdfGoldBanner}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
+
+      <div style={pdfFooter}>
+        <span>www.polokotombstones.co.za</span>
+        <span>info@polokotombstones.co.za</span>
+      </div>
+    </div>
+  );
+}
+
+function chunkProducts(products: Product[], size: number) {
+  const chunks: Product[][] = [];
+
+  for (let i = 0; i < products.length; i += size) {
+    chunks.push(products.slice(i, i + size));
+  }
+
+  return chunks;
 }
 
 const page: React.CSSProperties = {
@@ -222,6 +526,18 @@ const subtitle: React.CSSProperties = {
   fontSize: "18px",
   fontStyle: "italic",
   lineHeight: 1.7,
+};
+
+const downloadButton: React.CSSProperties = {
+  marginTop: "22px",
+  background: "#14110D",
+  color: "#C8A96A",
+  border: "1px solid #C8A96A",
+  padding: "13px 20px",
+  letterSpacing: "3px",
+  textTransform: "uppercase",
+  fontSize: "12px",
+  fontWeight: 700,
 };
 
 const grid: React.CSSProperties = {
@@ -409,4 +725,273 @@ const backButton: React.CSSProperties = {
   color: "#14110D",
   textDecoration: "none",
   fontWeight: 700,
+};
+
+const pdfWrapper: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: "-10000px",
+  width: "794px",
+  background: "#14110D",
+  zIndex: -1,
+};
+
+const pdfPage: React.CSSProperties = {
+  width: "794px",
+  height: "1123px",
+  background: "#14110D",
+  color: "#F8EFE0",
+  padding: "58px",
+  boxSizing: "border-box",
+  fontFamily: "Georgia, 'Times New Roman', serif",
+  position: "relative",
+};
+
+const pdfPageLight: React.CSSProperties = {
+  width: "794px",
+  height: "1123px",
+  background: "#F4EFE6",
+  color: "#17130E",
+  padding: "58px",
+  boxSizing: "border-box",
+  fontFamily: "Georgia, 'Times New Roman', serif",
+  position: "relative",
+};
+
+const pdfTopLine: React.CSSProperties = {
+  color: "#C8A96A",
+  letterSpacing: "7px",
+  fontSize: "13px",
+  fontWeight: 700,
+};
+
+const pdfCoverCenter: React.CSSProperties = {
+  marginTop: "170px",
+};
+
+const pdfCoverTitle: React.CSSProperties = {
+  fontSize: "64px",
+  lineHeight: 1.05,
+  margin: 0,
+  color: "#F8EFE0",
+};
+
+const pdfCoverSubtitle: React.CSSProperties = {
+  fontSize: "22px",
+  lineHeight: 1.6,
+  color: "#D8C29B",
+  maxWidth: "610px",
+};
+
+const pdfPromiseGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "14px",
+  marginTop: "50px",
+};
+
+const pdfPromiseBox: React.CSSProperties = {
+  border: "1px solid #C8A96A",
+  color: "#C8A96A",
+  padding: "18px",
+  fontSize: "15px",
+  fontWeight: 700,
+  letterSpacing: "2px",
+  lineHeight: 1.4,
+};
+
+const pdfFooter: React.CSSProperties = {
+  position: "absolute",
+  bottom: "42px",
+  left: "58px",
+  right: "58px",
+  display: "flex",
+  justifyContent: "space-between",
+  color: "#C8A96A",
+  fontSize: "14px",
+};
+
+const pdfSmallGold: React.CSSProperties = {
+  color: "#C08A18",
+  letterSpacing: "5px",
+  fontSize: "12px",
+  fontWeight: 700,
+  textTransform: "uppercase",
+};
+
+const pdfSectionTitle: React.CSSProperties = {
+  fontSize: "48px",
+  margin: "0 0 24px",
+  color: "#17130E",
+};
+
+const pdfSectionTitleDark: React.CSSProperties = {
+  fontSize: "48px",
+  margin: "0 0 24px",
+  color: "#F8EFE0",
+};
+
+const pdfBodyText: React.CSSProperties = {
+  fontSize: "22px",
+  lineHeight: 1.7,
+  color: "#5C5145",
+};
+
+const pdfInfoGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "18px",
+  marginTop: "40px",
+};
+
+const pdfInfoCard: React.CSSProperties = {
+  background: "#FFF9EF",
+  border: "1px solid #D8C29B",
+  padding: "22px",
+  fontSize: "17px",
+  lineHeight: 1.5,
+};
+
+const pdfGoldBanner: React.CSSProperties = {
+  marginTop: "50px",
+  background: "#C8A96A",
+  color: "#14110D",
+  padding: "18px",
+  textAlign: "center",
+  fontWeight: 700,
+  letterSpacing: "3px",
+  fontSize: "15px",
+};
+
+const pdfServicesGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "18px",
+  marginTop: "36px",
+};
+
+const pdfServiceItem: React.CSSProperties = {
+  border: "1px solid #C8A96A",
+  color: "#F8EFE0",
+  padding: "22px",
+  fontSize: "22px",
+};
+
+const pdfDarkBody: React.CSSProperties = {
+  color: "#D8C29B",
+  fontSize: "21px",
+  lineHeight: 1.7,
+  marginTop: "45px",
+};
+
+const pdfProductHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "20px",
+  alignItems: "flex-start",
+};
+
+const pdfProductPageTitle: React.CSSProperties = {
+  fontSize: "42px",
+  margin: 0,
+};
+
+const pdfInstallBadge: React.CSSProperties = {
+  background: "#14110D",
+  color: "#C8A96A",
+  padding: "12px",
+  fontSize: "11px",
+  fontWeight: 700,
+  letterSpacing: "2px",
+  textAlign: "center",
+  width: "230px",
+};
+
+const pdfProductGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "18px",
+  marginTop: "30px",
+};
+
+const pdfProductCard: React.CSSProperties = {
+  background: "#FFF9EF",
+  border: "1px solid #D8C29B",
+  overflow: "hidden",
+  minHeight: "410px",
+};
+
+const pdfProductImageBox: React.CSSProperties = {
+  height: "210px",
+  background: "#E8DDC9",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const pdfProductImage: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+};
+
+const pdfNoImage: React.CSSProperties = {
+  color: "#7A5A28",
+  fontSize: "16px",
+};
+
+const pdfProductContent: React.CSSProperties = {
+  padding: "16px",
+};
+
+const pdfProductCategory: React.CSSProperties = {
+  color: "#9B7434",
+  letterSpacing: "3px",
+  fontSize: "9px",
+  textTransform: "uppercase",
+  margin: "0 0 6px",
+};
+
+const pdfProductTitle: React.CSSProperties = {
+  fontSize: "20px",
+  margin: "0 0 6px",
+};
+
+const pdfProductCode: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#7A5A28",
+  margin: "0 0 6px",
+};
+
+const pdfProductPrice: React.CSSProperties = {
+  fontSize: "18px",
+  color: "#C08A18",
+  fontWeight: 700,
+  margin: "0 0 8px",
+};
+
+const pdfProductDescription: React.CSSProperties = {
+  fontSize: "13px",
+  lineHeight: 1.45,
+  color: "#5C5145",
+  margin: 0,
+};
+
+const pdfPageFooter: React.CSSProperties = {
+  position: "absolute",
+  bottom: "30px",
+  left: "58px",
+  right: "58px",
+  display: "flex",
+  justifyContent: "space-between",
+  color: "#9B7434",
+  fontSize: "13px",
+};
+
+const pdfContactBox: React.CSSProperties = {
+  border: "1px solid #C8A96A",
+  padding: "24px",
+  marginTop: "20px",
+  color: "#F8EFE0",
+  fontSize: "20px",
 };
