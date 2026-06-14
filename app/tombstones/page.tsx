@@ -301,6 +301,7 @@ export default function TombstonesPage() {
           <PdfProductPage
             key={index}
             pageNumber={index + 1}
+            totalPages={productPages.length}
             products={pageProducts}
           />
         ))}
@@ -389,10 +390,14 @@ function PdfServicesPage() {
 function PdfProductPage({
   products,
   pageNumber,
+  totalPages,
 }: {
   products: Product[];
   pageNumber: number;
+  totalPages: number;
 }) {
+  const isLastProductPage = pageNumber === totalPages;
+
   return (
     <div data-pdf-page="true" style={pdfPageLight}>
       <div style={pdfProductHeader}>
@@ -439,6 +444,30 @@ function PdfProductPage({
         ))}
       </div>
 
+      {isLastProductPage && products.length < 6 ? (
+        <div style={pdfWhyChooseSection}>
+          <h3 style={pdfWhyChooseTitle}>Why Families Choose Poloko Tombstones</h3>
+
+          <div style={pdfWhyChooseGrid}>
+            <div style={pdfWhyChooseCard}>✓ 20+ Years Granite Experience</div>
+            <div style={pdfWhyChooseCard}>✓ Premium Granite Materials</div>
+            <div style={pdfWhyChooseCard}>✓ Custom Memorial Designs</div>
+            <div style={pdfWhyChooseCard}>✓ Professional Engraving</div>
+            <div style={pdfWhyChooseCard}>✓ Repairs & Restoration</div>
+            <div style={pdfWhyChooseCard}>✓ Nationwide Installation</div>
+          </div>
+
+          <div style={pdfStoryBox}>
+            <h4 style={pdfStoryHeading}>A Legacy Carved In Stone</h4>
+            <p style={pdfStoryText}>
+              Poloko Tombstones combines granite craftsmanship with modern
+              memorial design. Every monument is created with dignity, precision
+              and lasting quality.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <div style={pdfPageFooter}>
         <span>Poloko Tombstones</span>
         <span>Page {pageNumber}</span>
@@ -451,7 +480,7 @@ function PdfContactPage() {
   return (
     <div data-pdf-page="true" style={pdfPageLight}>
       <p style={pdfSmallGold}>CONTACT US</p>
-      <h2 style={pdfSectionTitle}>Request a Quote</h2>
+      <h2 style={pdfSectionTitle}>Let's Create a Lasting Memorial</h2>
 
       <div style={pdfContactGrid}>
         <div style={pdfContactBoxLight}>
@@ -469,6 +498,19 @@ function PdfContactPage() {
           <p>083 928 0868</p>
           <p>072 736 3463</p>
         </div>
+      </div>
+
+      <div style={pdfQrSection}>
+        <img
+          src="/website-qr.png"
+          alt="Poloko Tombstones Website QR"
+          style={pdfQrImage}
+        />
+
+        <p style={pdfQrText}>
+          Scan to browse our complete online catalogue, view additional designs
+          and request a quote.
+        </p>
       </div>
 
       <div style={pdfGoldBanner}>EXPERT INSTALLATION ANYWHERE IN SOUTH AFRICA</div>
@@ -990,6 +1032,50 @@ const pdfProductPrice: React.CSSProperties = {
   margin: 0,
 };
 
+const pdfWhyChooseSection: React.CSSProperties = {
+  marginTop: "34px",
+};
+
+const pdfWhyChooseTitle: React.CSSProperties = {
+  fontSize: "26px",
+  margin: "0 0 18px",
+  color: "#17130E",
+};
+
+const pdfWhyChooseGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+};
+
+const pdfWhyChooseCard: React.CSSProperties = {
+  border: "1px solid #D8C29B",
+  background: "#FFF9EF",
+  padding: "12px",
+  fontSize: "14px",
+  fontWeight: 600,
+};
+
+const pdfStoryBox: React.CSSProperties = {
+  marginTop: "20px",
+  background: "#FFF9EF",
+  border: "1px solid #D8C29B",
+  padding: "18px",
+};
+
+const pdfStoryHeading: React.CSSProperties = {
+  margin: "0 0 8px",
+  color: "#C08A18",
+  fontSize: "20px",
+};
+
+const pdfStoryText: React.CSSProperties = {
+  margin: 0,
+  fontSize: "14px",
+  lineHeight: 1.7,
+  color: "#5C5145",
+};
+
 const pdfPageFooter: React.CSSProperties = {
   position: "absolute",
   bottom: "30px",
@@ -1014,4 +1100,25 @@ const pdfContactBoxLight: React.CSSProperties = {
   padding: "24px",
   color: "#17130E",
   fontSize: "20px",
+};
+
+const pdfQrSection: React.CSSProperties = {
+  marginTop: "44px",
+  textAlign: "center",
+};
+
+const pdfQrImage: React.CSSProperties = {
+  width: "145px",
+  height: "145px",
+  objectFit: "contain",
+  margin: "0 auto 14px",
+  display: "block",
+};
+
+const pdfQrText: React.CSSProperties = {
+  fontSize: "17px",
+  color: "#7A5A28",
+  lineHeight: 1.6,
+  maxWidth: "430px",
+  margin: "0 auto",
 };
