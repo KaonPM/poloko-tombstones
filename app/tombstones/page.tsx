@@ -179,7 +179,9 @@ export default function TombstonesPage() {
             style={{
               ...downloadButton,
               opacity:
-                downloading || loading || catalogueProducts.length === 0 ? 0.6 : 1,
+                downloading || loading || catalogueProducts.length === 0
+                  ? 0.6
+                  : 1,
               cursor:
                 downloading || loading || catalogueProducts.length === 0
                   ? "not-allowed"
@@ -221,11 +223,10 @@ export default function TombstonesPage() {
                 <p style={description}>{product.description}</p>
 
                 <Link
-                  href={`/#contact?product=${encodeURIComponent(product.title)}`}
+                  href={`/?product=${encodeURIComponent(product.title)}`}
                   style={button}
                 >
                   Request Quote For This Design
-
                 </Link>
               </div>
             </article>
@@ -284,11 +285,10 @@ export default function TombstonesPage() {
               <p style={description}>{selectedProduct.description}</p>
 
               <Link
-                href={`/#contact?product=${encodeURIComponent(selectedProduct.title)}`}
+                href={`/?product=${encodeURIComponent(selectedProduct.title)}`}
                 style={button}
               >
                 Request Quote For This Design
-
               </Link>
             </div>
           </div>
