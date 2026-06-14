@@ -87,7 +87,7 @@ export default function TombstonesPage() {
     });
   }, [products]);
 
-  const productPages = chunkProducts(catalogueProducts, 4);
+  const productPages = chunkProducts(catalogueProducts, 6);
 
   function openProduct(product: Product) {
     setSelectedProduct(product);
@@ -320,25 +320,28 @@ export default function TombstonesPage() {
 function PdfCoverPage() {
   return (
     <div data-pdf-page="true" style={pdfPageLight}>
-      <div style={pdfLogoBox}>
-        <img
-          src="/poloko-tombstones-logo.png"
-          alt="Poloko Tombstones"
-          style={pdfLogo}
-        />
-      </div>
+      <div style={pdfCoverFrame}>
+        <div style={pdfLogoBox}>
+          <img
+            src="/poloko-tombstones-logo.png"
+            alt="Poloko Tombstones"
+            style={pdfLogo}
+          />
+        </div>
 
-      <div style={pdfCoverCenter}>
-        <h1 style={pdfCoverTitleLight}>Tombstone Catalogue</h1>
-        <p style={pdfCoverSubtitleLight}>A Legacy Carved in Stone</p>
+        <div style={pdfCoverCenter}>
+          <p style={pdfCoverSmall}>Premium Granite Memorials</p>
+          <h1 style={pdfCoverTitleLight}>Tombstone Catalogue</h1>
+          <p style={pdfCoverSubtitleLight}>A Legacy Carved in Stone</p>
 
-        <div style={pdfPrintPromiseGrid}>
-          <div style={pdfPrintPromiseBox}>
-            Expert Installation Anywhere in South Africa
+          <div style={pdfPrintPromiseGrid}>
+            <div style={pdfPrintPromiseBox}>
+              Expert Installation Anywhere in South Africa
+            </div>
+            <div style={pdfPrintPromiseBox}>Premium Granite Tombstones</div>
+            <div style={pdfPrintPromiseBox}>Custom Memorial Designs</div>
+            <div style={pdfPrintPromiseBox}>Professional Engraving</div>
           </div>
-          <div style={pdfPrintPromiseBox}>Premium Granite Tombstones</div>
-          <div style={pdfPrintPromiseBox}>Custom Memorial Designs</div>
-          <div style={pdfPrintPromiseBox}>Professional Engraving</div>
         </div>
       </div>
 
@@ -776,31 +779,51 @@ const pdfPageLight: React.CSSProperties = {
   position: "relative",
 };
 
+const pdfCoverFrame: React.CSSProperties = {
+  border: "2px solid #D8C29B",
+  background: "#FFF9EF",
+  minHeight: "880px",
+  padding: "42px",
+  boxSizing: "border-box",
+};
+
 const pdfLogoBox: React.CSSProperties = {
   textAlign: "center",
-  marginTop: "35px",
+  marginTop: "30px",
+  width: "100%",
 };
 
 const pdfLogo: React.CSSProperties = {
-  width: "230px",
+  width: "330px",
   height: "auto",
   objectFit: "contain",
+  display: "block",
+  margin: "0 auto",
 };
 
 const pdfCoverCenter: React.CSSProperties = {
-  marginTop: "120px",
+  marginTop: "80px",
   textAlign: "center",
 };
 
+const pdfCoverSmall: React.CSSProperties = {
+  color: "#9B7434",
+  letterSpacing: "4px",
+  fontSize: "12px",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  marginBottom: "16px",
+};
+
 const pdfCoverTitleLight: React.CSSProperties = {
-  fontSize: "58px",
+  fontSize: "62px",
   lineHeight: 1.05,
   margin: 0,
   color: "#17130E",
 };
 
 const pdfCoverSubtitleLight: React.CSSProperties = {
-  fontSize: "25px",
+  fontSize: "26px",
   color: "#C08A18",
   marginTop: "18px",
 };
@@ -809,12 +832,12 @@ const pdfPrintPromiseGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: "14px",
-  marginTop: "70px",
+  marginTop: "55px",
 };
 
 const pdfPrintPromiseBox: React.CSSProperties = {
   border: "1px solid #D8C29B",
-  background: "#FFF9EF",
+  background: "#F4EFE6",
   color: "#17130E",
   padding: "20px",
   fontSize: "16px",
@@ -900,25 +923,25 @@ const pdfInstallBadge: React.CSSProperties = {
 
 const pdfProductGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "18px",
-  marginTop: "30px",
+  gridTemplateColumns: "1fr 1fr 1fr",
+  gap: "14px",
+  marginTop: "24px",
 };
 
 const pdfProductCard: React.CSSProperties = {
   background: "#FFF9EF",
   border: "1px solid #D8C29B",
   overflow: "hidden",
-  minHeight: "390px",
+  minHeight: "315px",
 };
 
 const pdfProductImageBox: React.CSSProperties = {
-  height: "260px",
+  height: "190px",
   background: "#F4EFE6",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "10px",
+  padding: "8px",
   boxSizing: "border-box",
 };
 
@@ -938,30 +961,30 @@ const pdfNoImage: React.CSSProperties = {
 };
 
 const pdfProductContent: React.CSSProperties = {
-  padding: "14px 16px 16px",
+  padding: "12px 14px 14px",
 };
 
 const pdfProductCategory: React.CSSProperties = {
   color: "#9B7434",
-  letterSpacing: "3px",
-  fontSize: "9px",
+  letterSpacing: "2px",
+  fontSize: "8px",
   textTransform: "uppercase",
-  margin: "0 0 6px",
+  margin: "0 0 5px",
 };
 
 const pdfProductTitle: React.CSSProperties = {
-  fontSize: "20px",
-  margin: "0 0 6px",
+  fontSize: "16px",
+  margin: "0 0 5px",
 };
 
 const pdfProductCode: React.CSSProperties = {
-  fontSize: "12px",
+  fontSize: "10px",
   color: "#7A5A28",
-  margin: "0 0 6px",
+  margin: "0 0 5px",
 };
 
 const pdfProductPrice: React.CSSProperties = {
-  fontSize: "18px",
+  fontSize: "15px",
   color: "#C08A18",
   fontWeight: 700,
   margin: 0,
