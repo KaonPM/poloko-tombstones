@@ -3,6 +3,7 @@
 import type React from "react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabase";
 import {
   Menu,
   X,
@@ -17,6 +18,14 @@ import {
   HeartHandshake,
   Sparkles,
 } from "lucide-react";
+
+type SelectedQuoteProduct = {
+  id: string;
+  title: string;
+  price: string | null;
+  image_url: string | null;
+  category: string;
+};
 
 const services = [
   "New Tombstone Sales",
@@ -79,6 +88,8 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [selectedQuoteProduct, setSelectedQuoteProduct] =
+    useState<SelectedQuoteProduct | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -100,24 +111,39 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const product = params.get("product");
+    async function loadSelectedProduct() {
+      const params = new URLSearchParams(window.location.search);
+      const productId = params.get("productId");
 
-    if (!product) return;
+      if (!productId) return;
 
-    setForm((current) => ({
-      ...current,
-      service: "New Tombstone Sales",
-      message:
-        `Product of Interest: ${product}\n\n` +
-        "Please contact me regarding pricing, design options and installation.",
-    }));
+      const { data, error } = await supabase
+        .from("tombstone_products")
+        .select("id,title,price,image_url,category")
+        .eq("id", productId)
+        .single();
 
-    setTimeout(() => {
-      document
-        .getElementById("contact")
-        ?.scrollIntoView({ behavior: "smooth" });
-    }, 300);
+      if (error || !data) return;
+
+      setSelectedQuoteProduct(data);
+
+      setForm((current) => ({
+        ...current,
+        service: "New Tombstone Sales",
+        message:
+          `Product of Interest: ${data.title}\n` +
+          `Price: ${data.price || "Quote Required"}\n\n` +
+          "Please contact me regarding pricing, design options and installation.",
+      }));
+
+      setTimeout(() => {
+        document
+          .getElementById("contact")
+          ?.scrollIntoView({ behavior: "smooth" });
+      }, 500);
+    }
+
+    loadSelectedProduct();
   }, []);
 
   function updateForm(
@@ -129,6 +155,8 @@ export default function Home() {
   }
 
   function selectService(service: string) {
+    setSelectedQuoteProduct(null);
+
     setForm((current) => ({
       ...current,
       service,
@@ -151,7 +179,10 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          selectedProduct: selectedQuoteProduct,
+        }),
       });
 
       const result = await response.json();
@@ -165,6 +196,7 @@ export default function Home() {
 
       alert("Thank you. Your quote request has been sent successfully.");
 
+      setSelectedQuoteProduct(null);
       setForm({
         name: "",
         phone: "",
@@ -197,10 +229,18 @@ export default function Home() {
         </a>
 
         <nav style={{ ...desktopNav, display: isMobile ? "none" : "flex" }}>
-          <a href="#services" style={navLink}>Services</a>
-          <a href="#catalogue" style={navLink}>Catalogue</a>
-          <a href="#about" style={navLink}>About</a>
-          <a href="#contact" style={navLink}>Contact</a>
+          <a href="#services" style={navLink}>
+            Services
+          </a>
+          <a href="#catalogue" style={navLink}>
+            Catalogue
+          </a>
+          <a href="#about" style={navLink}>
+            About
+          </a>
+          <a href="#contact" style={navLink}>
+            Contact
+          </a>
         </nav>
 
         <button style={menuButton} onClick={() => setMenuOpen(true)}>
@@ -447,7 +487,8 @@ export default function Home() {
 
           <p style={introStoryText}>
             Poloko Tombstones was built on a simple belief: every life deserves
-            to be remembered with dignity, beauty and permanence, carved in stone.
+            to be remembered with dignity, beauty and permanence, carved in
+            stone.
           </p>
 
           <p style={bodyText}>
@@ -457,51 +498,11 @@ export default function Home() {
           </p>
 
           <p style={bodyText}>
-            Beyond memorials, we are proud suppliers of premium commercial granite,
-            from kitchen countertops and vanity tops to staircases and window sills,
-            bringing the same standard of excellence to every stone we cut and polish.
+            Beyond memorials, we are proud suppliers of premium commercial
+            granite, from kitchen countertops and vanity tops to staircases and
+            window sills, bringing the same standard of excellence to every
+            stone we cut and polish.
           </p>
-
-          <div
-            style={{
-              ...storyGrid,
-              gridTemplateColumns: isMobile
-                ? "1fr"
-                : "repeat(auto-fit, minmax(210px, 1fr))",
-            }}
-          >
-            <div style={storyCard}>
-              <span style={storySymbol}>✦</span>
-              <strong style={storyTitle}>In-House Excellence</strong>
-              <p style={storyText}>
-                Cutting, polishing and sandblasting handled with care.
-              </p>
-            </div>
-
-            <div style={storyCard}>
-              <span style={storySymbol}>◈</span>
-              <strong style={storyTitle}>Master Craftsmanship</strong>
-              <p style={storyText}>
-                Stone-working expertise built through more than two decades.
-              </p>
-            </div>
-
-            <div style={storyCard}>
-              <span style={storySymbol}>❖</span>
-              <strong style={storyTitle}>Family & Trade</strong>
-              <p style={storyText}>
-                Serving families, funeral parlours and property clients.
-              </p>
-            </div>
-
-            <div style={storyCard}>
-              <span style={storySymbol}>◆</span>
-              <strong style={storyTitle}>Custom Work</strong>
-              <p style={storyText}>
-                Every piece tailored to your vision and practical needs.
-              </p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -533,9 +534,15 @@ export default function Home() {
               <div>
                 <h3 style={contactTitle}>Garankuwa</h3>
                 <p style={contactText}>750 Zone 7</p>
-                <a href="tel:+27823915772" style={contactLink}>082 391 5772</a>
-                <a href="tel:+27731633836" style={contactLink}>073 163 3836</a>
-                <a href="tel:+27636644824" style={contactLink}>063 664 4824</a>
+                <a href="tel:+27823915772" style={contactLink}>
+                  082 391 5772
+                </a>
+                <a href="tel:+27731633836" style={contactLink}>
+                  073 163 3836
+                </a>
+                <a href="tel:+27636644824" style={contactLink}>
+                  063 664 4824
+                </a>
               </div>
             </div>
 
@@ -544,9 +551,15 @@ export default function Home() {
               <div>
                 <h3 style={contactTitle}>Ganyesa</h3>
                 <p style={contactText}>Phohung Section</p>
-                <a href="tel:+27823915772" style={contactLink}>082 391 5772</a>
-                <a href="tel:+27839280868" style={contactLink}>083 928 0868</a>
-                <a href="tel:+27727363463" style={contactLink}>072 736 3463</a>
+                <a href="tel:+27823915772" style={contactLink}>
+                  082 391 5772
+                </a>
+                <a href="tel:+27839280868" style={contactLink}>
+                  083 928 0868
+                </a>
+                <a href="tel:+27727363463" style={contactLink}>
+                  072 736 3463
+                </a>
               </div>
             </div>
 
@@ -578,6 +591,33 @@ export default function Home() {
 
         <form style={quoteForm} onSubmit={submitQuote}>
           <p style={formSmallLabel}>REQUEST A QUOTE</p>
+
+          {selectedQuoteProduct ? (
+            <div style={selectedProductBox}>
+              <div style={selectedProductImageWrap}>
+                {selectedQuoteProduct.image_url ? (
+                  <img
+                    src={selectedQuoteProduct.image_url}
+                    alt={selectedQuoteProduct.title}
+                    style={selectedProductImage}
+                  />
+                ) : (
+                  <div style={selectedProductNoImage}>No Image</div>
+                )}
+              </div>
+
+              <div>
+                <p style={selectedProductLabel}>Selected Design</p>
+                <h3 style={selectedProductTitle}>
+                  {selectedQuoteProduct.title}
+                </h3>
+                <p style={selectedProductMeta}>
+                  {selectedQuoteProduct.category} ·{" "}
+                  {selectedQuoteProduct.price || "Quote Required"}
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           <label style={formLabel}>Full Name</label>
           <input
@@ -1070,41 +1110,6 @@ const introStoryText: React.CSSProperties = {
   fontStyle: "italic",
 };
 
-const storyGrid: React.CSSProperties = {
-  display: "grid",
-  gap: "12px",
-  marginTop: "22px",
-};
-
-const storyCard: React.CSSProperties = {
-  border: "1px solid #D8C29B",
-  background: "#FFF9EF",
-  borderRadius: "16px",
-  padding: "15px",
-  color: "#5C5145",
-  lineHeight: 1.55,
-};
-
-const storySymbol: React.CSSProperties = {
-  display: "block",
-  color: "#C08A18",
-  fontSize: "18px",
-  marginBottom: "8px",
-};
-
-const storyTitle: React.CSSProperties = {
-  display: "block",
-  letterSpacing: "3px",
-  textTransform: "uppercase",
-  color: "#17130E",
-  fontSize: "11px",
-  marginBottom: "6px",
-};
-
-const storyText: React.CSSProperties = {
-  margin: 0,
-};
-
 const contactSection: React.CSSProperties = {
   background: "#FFF9EF",
   display: "grid",
@@ -1156,6 +1161,63 @@ const quoteForm: React.CSSProperties = {
   padding: "26px",
   border: "1px solid #D8C29B",
   boxShadow: "0 20px 50px rgba(35,27,18,0.09)",
+};
+
+const selectedProductBox: React.CSSProperties = {
+  border: "1px solid #D8C29B",
+  background: "#F4EFE6",
+  padding: "14px",
+  display: "grid",
+  gridTemplateColumns: "110px 1fr",
+  gap: "14px",
+  alignItems: "center",
+  marginBottom: "18px",
+};
+
+const selectedProductImageWrap: React.CSSProperties = {
+  width: "110px",
+  height: "110px",
+  background: "#FFF9EF",
+  border: "1px solid #D8C29B",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+};
+
+const selectedProductImage: React.CSSProperties = {
+  maxWidth: "100%",
+  maxHeight: "100%",
+  width: "auto",
+  height: "auto",
+  objectFit: "contain",
+  display: "block",
+};
+
+const selectedProductNoImage: React.CSSProperties = {
+  color: "#7A5A28",
+  fontSize: "12px",
+};
+
+const selectedProductLabel: React.CSSProperties = {
+  color: "#9B7434",
+  letterSpacing: "3px",
+  textTransform: "uppercase",
+  fontSize: "10px",
+  fontWeight: 700,
+  margin: "0 0 6px",
+};
+
+const selectedProductTitle: React.CSSProperties = {
+  color: "#17130E",
+  fontSize: "20px",
+  margin: "0 0 6px",
+};
+
+const selectedProductMeta: React.CSSProperties = {
+  color: "#7A5A28",
+  fontSize: "14px",
+  margin: 0,
 };
 
 const formSmallLabel: React.CSSProperties = {

@@ -218,12 +218,13 @@ export default function TombstonesPage() {
                   {product.is_featured ? "Featured · " : ""}
                   {product.category}
                 </p>
+
                 <h2 style={cardTitle}>{product.title}</h2>
                 <p style={price}>{product.price || "Quote Required"}</p>
                 <p style={description}>{product.description}</p>
 
                 <Link
-                  href={`/?product=${encodeURIComponent(product.title)}`}
+                  href={`/?productId=${encodeURIComponent(product.id)}`}
                   style={button}
                 >
                   Request Quote For This Design
@@ -260,7 +261,11 @@ export default function TombstonesPage() {
                     Zoom Out
                   </button>
 
-                  <button type="button" onClick={() => setZoom(1)} style={zoomButton}>
+                  <button
+                    type="button"
+                    onClick={() => setZoom(1)}
+                    style={zoomButton}
+                  >
                     Reset
                   </button>
                 </div>
@@ -285,7 +290,7 @@ export default function TombstonesPage() {
               <p style={description}>{selectedProduct.description}</p>
 
               <Link
-                href={`/?product=${encodeURIComponent(selectedProduct.title)}`}
+                href={`/?productId=${encodeURIComponent(selectedProduct.id)}`}
                 style={button}
               >
                 Request Quote For This Design
