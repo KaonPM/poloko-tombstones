@@ -155,18 +155,26 @@ export default function Home() {
   }
 
   function selectService(service: string) {
+    if (service === "New Tombstone Sales") {
+      window.location.href = "/tombstones";
+      return;
+    }
+
     setSelectedQuoteProduct(null);
 
     setForm((current) => ({
       ...current,
       service,
-      message:
-        service === "New Tombstone Sales"
-          ? current.message
-          : `I would like a quotation for ${service}.`,
+      message: `I would like a quotation for ${service}.`,
     }));
 
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function getServiceHoverPrompt(service: string) {
+    return service === "New Tombstone Sales"
+      ? "Click to open digital catalogue"
+      : "Send inquiry";
   }
 
   async function submitQuote(event: React.FormEvent<HTMLFormElement>) {
@@ -215,6 +223,24 @@ export default function Home() {
 
   return (
     <main style={page}>
+      <style>{`
+        .hover-prompt-target {
+          position: relative;
+        }
+
+        .hover-prompt-target .hover-prompt {
+          opacity: 0;
+          transform: translateY(8px);
+          pointer-events: none;
+          transition: opacity 180ms ease, transform 180ms ease;
+        }
+
+        .hover-prompt-target:hover .hover-prompt,
+        .hover-prompt-target:focus-within .hover-prompt {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      `}</style>
       <header style={header}>
         <a href="#home" style={brand}>
           <img
@@ -395,10 +421,15 @@ export default function Home() {
           {services.map((service, index) => (
             <button
               key={service}
+              className="hover-prompt-target"
+              title={getServiceHoverPrompt(service)}
               style={index === 0 ? activeServiceButton : serviceButton}
               onClick={() => selectService(service)}
             >
-              {service}
+              <span>{service}</span>
+              <span className="hover-prompt" style={serviceHoverPrompt}>
+                {getServiceHoverPrompt(service)}
+              </span>
             </button>
           ))}
         </div>
@@ -460,13 +491,18 @@ export default function Home() {
           padding: isMobile ? "52px 18px" : "64px 7%",
         }}
       >
-        <div
+        <a
+          href="/tombstones"
+          className="hover-prompt-target"
+          title="Click to open digital catalogue"
           style={{
             ...portraitImageFrame,
             width: isMobile ? "100%" : "min(350px, 88vw)",
             maxWidth: isMobile ? "330px" : "350px",
             height: isMobile ? "420px" : "500px",
             margin: isMobile ? "0 auto" : undefined,
+            textDecoration: "none",
+            display: "block",
           }}
         >
           <img
@@ -474,7 +510,10 @@ export default function Home() {
             alt="Poloko Tombstones granite craftsmanship"
             style={portraitImage}
           />
-        </div>
+          <span className="hover-prompt" style={imageHoverPrompt}>
+            Click to open digital catalogue
+          </span>
+        </a>
 
         <div style={aboutTextBox}>
           <p style={smallLabel}>OUR STORY</p>
@@ -1009,6 +1048,8 @@ const serviceButton: React.CSSProperties = {
   textTransform: "uppercase",
   fontSize: "12px",
   cursor: "pointer",
+  position: "relative",
+  overflow: "visible",
 };
 
 const activeServiceButton: React.CSSProperties = {
@@ -1016,6 +1057,24 @@ const activeServiceButton: React.CSSProperties = {
   background: "#14110D",
   color: "#C8A96A",
   transform: "skewX(-8deg)",
+};
+
+const serviceHoverPrompt: React.CSSProperties = {
+  position: "absolute",
+  left: "50%",
+  bottom: "calc(100% + 10px)",
+  transform: "translateX(-50%)",
+  background: "#14110D",
+  color: "#C8A96A",
+  border: "1px solid #C8A96A",
+  borderRadius: "999px",
+  padding: "8px 12px",
+  fontSize: "11px",
+  letterSpacing: "2px",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+  boxShadow: "0 12px 28px rgba(0,0,0,0.2)",
+  zIndex: 5,
 };
 
 const catalogueGrid: React.CSSProperties = {
@@ -1090,6 +1149,24 @@ const portraitImage: React.CSSProperties = {
   height: "100%",
   objectFit: "cover",
   display: "block",
+};
+
+const imageHoverPrompt: React.CSSProperties = {
+  position: "absolute",
+  left: "50%",
+  bottom: "28px",
+  transform: "translateX(-50%)",
+  background: "rgba(20,17,13,0.92)",
+  color: "#C8A96A",
+  border: "1px solid #C8A96A",
+  borderRadius: "999px",
+  padding: "11px 16px",
+  fontSize: "12px",
+  letterSpacing: "3px",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+  boxShadow: "0 12px 28px rgba(0,0,0,0.28)",
+  zIndex: 5,
 };
 
 const aboutTextBox: React.CSSProperties = {
