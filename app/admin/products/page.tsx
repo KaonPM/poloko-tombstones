@@ -1,6 +1,7 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Dynamic previews intentionally retain the existing rendering. */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -11,6 +12,7 @@ type Product = {
   description: string | null;
   price: string | null;
   image_url: string | null;
+  product_code: string;
   is_featured: boolean;
   is_active: boolean;
 };
@@ -47,25 +49,7 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-  useEffect(() => {
-    checkSession();
-  }, []);
-
-  async function checkSession() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      router.push("/admin/login");
-      return;
-    }
-
-    setChecking(false);
-    fetchProducts();
-  }
-
-  async function fetchProducts() {
+  const fetchProducts = useCallback(async () => {
     const { data, error } = await supabase
       .from("tombstone_products")
       .select("*")
@@ -77,7 +61,25 @@ export default function AdminProductsPage() {
     }
 
     setProducts(data || []);
-  }
+  }, []);
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/admin/login");
+        return;
+      }
+
+      setChecking(false);
+      await fetchProducts();
+    }
+
+    void checkSession();
+  }, [fetchProducts, router]);
 
   async function uploadImage() {
     if (!imageFile) return "";
@@ -391,6 +393,7 @@ export default function AdminProductsPage() {
               </div>
 
               <h3>{product.title}</h3>
+              <p style={productCode}>{product.product_code}</p>
               <p>{product.category}</p>
               <strong>{product.price || "Quote Required"}</strong>
               <p>{product.description}</p>
@@ -776,4 +779,10 @@ const modalContent: React.CSSProperties = {
 const modalTitle: React.CSSProperties = {
   fontSize: "30px",
   margin: "0 0 10px",
+};
+
+const productCode: React.CSSProperties = {
+  color: "#9B7434",
+  fontWeight: 700,
+  letterSpacing: "1px",
 };

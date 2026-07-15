@@ -1,7 +1,8 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Raw images are required for exact catalogue and html2canvas PDF rendering. */
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -30,9 +31,26 @@ export default function TombstonesPage() {
   const [sortBy, setSortBy] = useState<SortOption>("featured");
   const catalogueRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    fetchProducts();
+  const fetchProducts = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("tombstone_products")
+      .select(
+        "id,title,category,description,price,image_url,is_featured,product_code,display_order,created_at"
+      )
+      .eq("is_active", true)
+      .order("is_featured", { ascending: false })
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: false });
+
+    if (!error) setProducts(data || []);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    // Data is loaded asynchronously; state changes occur after Supabase resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchProducts();
+  }, [fetchProducts]);
 
   const sortedProducts = useMemo(() => {
     return [...products].sort((a, b) => {
@@ -97,21 +115,6 @@ export default function TombstonesPage() {
   function closeProduct() {
     setSelectedProduct(null);
     setZoom(1);
-  }
-
-  async function fetchProducts() {
-    const { data, error } = await supabase
-      .from("tombstone_products")
-      .select(
-        "id,title,category,description,price,image_url,is_featured,product_code,display_order,created_at"
-      )
-      .eq("is_active", true)
-      .order("is_featured", { ascending: false })
-      .order("display_order", { ascending: true })
-      .order("created_at", { ascending: false });
-
-    if (!error) setProducts(data || []);
-    setLoading(false);
   }
 
   async function downloadCatalogue() {
@@ -303,6 +306,7 @@ export default function TombstonesPage() {
       <div ref={catalogueRef} style={pdfWrapper}>
         <PdfCoverPage />
         <PdfServicesPage />
+        <PdfPaymentOptionsPage />
 
         {productPages.map((pageProducts, index) => (
           <PdfProductPage
@@ -394,6 +398,93 @@ function PdfServicesPage() {
   );
 }
 
+function PdfPaymentOptionsPage() {
+  const options = [
+    {
+      title: "Option 1 - Full Payment",
+      lines: ["Pay the full amount upfront.", "Total: R18,000", "Settled in one payment."],
+    },
+    {
+      title: "Option 2 - 50 / 50",
+      lines: ["50% deposit, 50% on completion.", "Deposit: R9,000", "Final: R9,000 on completion"],
+    },
+    {
+      title: "Option 3 - Lay-by (3 Payments)",
+      lines: ["50% deposit, balance over 2 months.", "Deposit: R9,000", "Then: 2 x R4,500 monthly"],
+    },
+    {
+      title: "Option 4 - Lay-by (6 Payments)",
+      lines: ["50% deposit, balance over 5 months.", "Deposit: R9,000", "Then: 5 x R1,800 monthly"],
+    },
+  ];
+
+  return (
+    <div data-pdf-page="true" style={pdfPageLight}>
+      <p style={pdfSmallGold}>POLOKO TOMBSTONES</p>
+      <h2 style={pdfPaymentTitle}>Payment Options</h2>
+      <p style={pdfPaymentExample}>Examples based on an R18,000 tombstone</p>
+
+      <div style={pdfPaymentGrid}>
+        {options.map((option) => (
+          <div key={option.title} style={pdfPaymentCard}>
+            <h3 style={pdfPaymentCardTitle}>{option.title}</h3>
+            {option.lines.map((line, index) => (
+              <p key={line} style={index > 0 ? pdfPaymentStrong : pdfPaymentLine}>
+                {line}
+              </p>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <section style={pdfBankSection}>
+        <h3 style={pdfPaymentSectionTitle}>Banking Details</h3>
+        <div style={pdfBankGrid}>
+          {[
+            ["Bank", "Capitec Business"],
+            ["Account Name", "Poloko Tombstones"],
+            ["Account Number", "1055336916"],
+            ["Account Type", "Business Current"],
+            ["Reference", "Surname & Initials"],
+            ["Proof of Payment", "info@polokotombstones.co.za"],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <span style={pdfBankLabel}>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div style={pdfPaymentBottomGrid}>
+        <section style={pdfPaymentInfoBox}>
+          <h3 style={pdfInfoTitle}>Accepted Payment Methods</h3>
+          <p>EFT / Bank Transfer</p>
+          <p>Cash deposit at any Capitec branch</p>
+          <p>In-store cash payment</p>
+          <em style={pdfCardNotice}>Card payments are not yet available.</em>
+        </section>
+        <section style={pdfPaymentInfoBox}>
+          <h3 style={pdfInfoTitle}>Terms & Conditions</h3>
+          <p>50% deposit secures your order.</p>
+          <p>Work starts after deposit and design approval.</p>
+          <p>Installation takes place after full payment.</p>
+          <p>Payments and deposits are non-refundable.</p>
+        </section>
+      </div>
+
+      <p style={pdfAcceptanceNote}>
+        Payment towards a quotation confirms acceptance of all payment terms and conditions.
+      </p>
+
+      <div style={pdfFooterLight}>
+        <span>Poloko Tombstones - A Legacy Carved in Stone</span>
+        <span>Page 3</span>
+      </div>
+    </div>
+  );
+}
+
 function PdfProductPage({
   products,
   pageNumber,
@@ -443,7 +534,7 @@ function PdfProductPage({
               </p>
               <h3 style={pdfProductTitle}>{product.title}</h3>
               <p style={pdfProductCode}>
-                Code: {product.product_code || "Available on request"}
+                Code: {product.product_code}
               </p>
               <p style={pdfProductPrice}>{product.price || "Quote Required"}</p>
             </div>
@@ -487,7 +578,7 @@ function PdfContactPage() {
   return (
     <div data-pdf-page="true" style={pdfPageLight}>
       <p style={pdfSmallGold}>CONTACT US</p>
-      <h2 style={pdfSectionTitle}>Let's Create a Lasting Memorial</h2>
+      <h2 style={pdfSectionTitle}>Let&apos;s Create a Lasting Memorial</h2>
 
       <div style={pdfContactGrid}>
         <div style={pdfContactBoxLight}>
@@ -934,6 +1025,115 @@ const pdfServiceItemLight: React.CSSProperties = {
   padding: "28px",
   fontSize: "22px",
   textAlign: "center",
+};
+
+const pdfPaymentTitle: React.CSSProperties = {
+  fontSize: "44px",
+  margin: "0 0 8px",
+  textTransform: "uppercase",
+};
+
+const pdfPaymentExample: React.CSSProperties = {
+  color: "#7A5A28",
+  fontStyle: "italic",
+  margin: "0 0 22px",
+};
+
+const pdfPaymentGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "16px",
+};
+
+const pdfPaymentCard: React.CSSProperties = {
+  minHeight: "132px",
+  border: "1px solid #C08A18",
+  borderRadius: "14px",
+  padding: "18px",
+  boxSizing: "border-box",
+  background: "rgba(255,255,255,0.25)",
+};
+
+const pdfPaymentCardTitle: React.CSSProperties = {
+  color: "#C08A18",
+  fontSize: "17px",
+  textTransform: "uppercase",
+  margin: "0 0 10px",
+};
+
+const pdfPaymentLine: React.CSSProperties = {
+  margin: "3px 0",
+  fontSize: "14px",
+};
+
+const pdfPaymentStrong: React.CSSProperties = {
+  ...pdfPaymentLine,
+  fontWeight: 700,
+};
+
+const pdfBankSection: React.CSSProperties = {
+  marginTop: "24px",
+};
+
+const pdfPaymentSectionTitle: React.CSSProperties = {
+  color: "#C08A18",
+  fontSize: "20px",
+  textTransform: "uppercase",
+  borderBottom: "1px solid #C08A18",
+  paddingBottom: "8px",
+  margin: "0 0 14px",
+};
+
+const pdfBankGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "15px 22px",
+  fontSize: "14px",
+};
+
+const pdfBankLabel: React.CSSProperties = {
+  display: "block",
+  color: "#B08A43",
+  textTransform: "uppercase",
+  fontSize: "11px",
+  marginBottom: "4px",
+};
+
+const pdfPaymentBottomGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "16px",
+  marginTop: "26px",
+};
+
+const pdfPaymentInfoBox: React.CSSProperties = {
+  minHeight: "182px",
+  border: "1px solid #C08A18",
+  borderRadius: "14px",
+  padding: "17px",
+  boxSizing: "border-box",
+  fontSize: "13px",
+  lineHeight: 1.35,
+};
+
+const pdfInfoTitle: React.CSSProperties = {
+  margin: "0 0 10px",
+  paddingBottom: "7px",
+  borderBottom: "1px solid #C08A18",
+  textTransform: "uppercase",
+  fontSize: "15px",
+};
+
+const pdfCardNotice: React.CSSProperties = {
+  color: "#8B2F27",
+  fontSize: "12px",
+};
+
+const pdfAcceptanceNote: React.CSSProperties = {
+  textAlign: "center",
+  fontStyle: "italic",
+  fontSize: "12px",
+  marginTop: "22px",
 };
 
 const pdfGoldBanner: React.CSSProperties = {

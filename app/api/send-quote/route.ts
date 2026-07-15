@@ -26,6 +26,26 @@ function escapeHtml(value: string | null | undefined) {
     .replaceAll("'", "&#039;");
 }
 
+function brandedEmailLayout(title: string, content: string) {
+  return `
+    <div style="margin:0;padding:28px 12px;background:#f2efe5;font-family:Arial,sans-serif;color:#1e1d1b;">
+      <table role="presentation" style="width:100%;max-width:680px;margin:0 auto;border-collapse:collapse;background:#fffaf0;border:1px solid #d3ad58;">
+        <tr><td style="padding:28px 32px 20px;text-align:center;border-bottom:1px solid #d3ad58;">
+          <img src="https://www.polokotombstones.co.za/poloko-tombstones-logo.png" alt="Poloko Tombstones" width="120" style="display:block;width:120px;height:auto;margin:0 auto 10px;" />
+          <div style="color:#c29231;font-family:Georgia,serif;font-style:italic;font-size:17px;">A Legacy Carved in Stone</div>
+          <div style="margin-top:9px;color:#51483d;font-size:12px;line-height:1.5;">Garankuwa: 073 163 3836 &nbsp;•&nbsp; Ganyesa: 083 928 0868<br />www.polokotombstones.co.za &nbsp;•&nbsp; info@polokotombstones.co.za</div>
+        </td></tr>
+        <tr><td style="padding:28px 32px;">
+          <h1 style="margin:0 0 22px;text-align:center;font-size:25px;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(title)}</h1>
+          <div style="width:90px;height:2px;background:#c29231;margin:-12px auto 26px;"></div>
+          ${content}
+        </td></tr>
+        <tr><td style="padding:18px 32px;text-align:center;background:#1e1d1b;color:#d3ad58;font-weight:bold;font-size:13px;letter-spacing:.5px;">POLOKO TOMBSTONES &nbsp;•&nbsp; A LEGACY CARVED IN STONE</td></tr>
+      </table>
+    </div>
+  `;
+}
+
 export async function POST(request: Request) {
   try {
     const {
@@ -102,7 +122,7 @@ export async function POST(request: Request) {
       `
       : "";
 
-    const internalEmailHtml = `
+    const internalEmailContent = `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#222;">
         <h2 style="margin-bottom:10px;">New Quote Request</h2>
 
@@ -130,6 +150,11 @@ export async function POST(request: Request) {
         <p>${escapeHtml(message).replaceAll("\n", "<br />")}</p>
       </div>
     `;
+
+    const internalEmailHtml = brandedEmailLayout(
+      "New Quote Request",
+      internalEmailContent
+    );
 
     const selectedProductText = selectedProduct
       ? `
@@ -163,7 +188,7 @@ ${message}
     });
 
     if (email) {
-      const customerEmailHtml = `
+      const customerEmailContent = `
         <div style="font-family:Arial,sans-serif;line-height:1.6;color:#222;">
           <p>Dear ${escapeHtml(name)},</p>
 
@@ -187,6 +212,11 @@ ${message}
 
           <p><strong>Message:</strong><br />${escapeHtml(message).replaceAll("\n", "<br />")}</p>
 
+          <div style="margin:24px 0;padding:18px;border:1px solid #d3ad58;border-radius:12px;background:#f2efe5;">
+            <h3 style="margin:0 0 10px;color:#b7892e;">Payment options available</h3>
+            <p style="margin:0;">Full payment, 50/50, or lay-by over 3 or 6 payments. A 50% deposit secures an order; exact amounts will appear on your formal quotation.</p>
+          </div>
+
           <p>
             Kind regards,<br />
             Poloko Tombstones<br />
@@ -196,6 +226,11 @@ ${message}
           </p>
         </div>
       `;
+
+      const customerEmailHtml = brandedEmailLayout(
+        "Quote Request Received",
+        customerEmailContent
+      );
 
       await resend.emails.send({
         from: "Poloko Tombstones <info@polokotombstones.co.za>",

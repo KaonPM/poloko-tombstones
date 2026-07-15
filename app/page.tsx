@@ -1,8 +1,10 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Preserve the established image sizing and cropping exactly. */
 
 import type React from "react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
   Menu,
@@ -85,6 +87,7 @@ const catalogueItems = [
 const whatsappNumber = "27731633836";
 
 export default function Home() {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -156,7 +159,7 @@ export default function Home() {
 
   function selectService(service: string) {
     if (service === "New Tombstone Sales") {
-      window.location.href = "/tombstones";
+      router.push("/tombstones");
       return;
     }
 
@@ -240,6 +243,48 @@ export default function Home() {
           opacity: 1;
           transform: translateY(0);
         }
+
+        .payment-pdf-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          width: 100%;
+          box-sizing: border-box;
+          margin: 12px 0 0;
+          padding: 11px 15px;
+          border: 1px solid #C8A96A;
+          background: transparent;
+          color: #7A5A28;
+          text-decoration: none;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          transition: background-color 180ms ease, color 180ms ease,
+            border-color 180ms ease, transform 180ms ease;
+        }
+
+        .payment-pdf-link:hover,
+        .payment-pdf-link:focus-visible {
+          background: #14110D;
+          border-color: #14110D;
+          color: #C8A96A;
+          transform: translateY(-2px);
+          outline: none;
+        }
+
+        .payment-pdf-link-arrow {
+          font-size: 18px;
+          line-height: 1;
+          transition: transform 180ms ease;
+        }
+
+        .payment-pdf-link:hover .payment-pdf-link-arrow,
+        .payment-pdf-link:focus-visible .payment-pdf-link-arrow {
+          transform: translateX(3px);
+        }
       `}</style>
       <header style={header}>
         <a href="#home" style={brand}>
@@ -258,7 +303,7 @@ export default function Home() {
           <a href="#services" style={navLink}>
             Services
           </a>
-          <a href="#catalogue" style={navLink}>
+          <a href="/tombstones" style={navLink}>
             Catalogue
           </a>
           <a href="#about" style={navLink}>
@@ -283,7 +328,11 @@ export default function Home() {
           {["Home", "Services", "Catalogue", "About", "Contact"].map((item) => (
             <a
               key={item}
-              href={`#${item === "Home" ? "home" : item.toLowerCase()}`}
+              href={
+                item === "Catalogue"
+                  ? "/tombstones"
+                  : `#${item === "Home" ? "home" : item.toLowerCase()}`
+              }
               style={menuLink}
               onClick={() => setMenuOpen(false)}
             >
@@ -554,10 +603,8 @@ export default function Home() {
         }}
       >
         <div style={contactInfo}>
-          <p style={smallLabel}>GET IN TOUCH</p>
-
           <h2 style={sectionTitle}>
-            Request a <span style={goldItalic}>Quote</span>
+            Get in <span style={goldItalic}>Touch</span>
           </h2>
 
           <GoldDivider align={isMobile ? "center" : "left"} />
@@ -628,8 +675,12 @@ export default function Home() {
           </div>
         </div>
 
-        <form style={quoteForm} onSubmit={submitQuote}>
-          <p style={formSmallLabel}>REQUEST A QUOTE</p>
+        <div>
+          <h2 style={formColumnTitle}>
+            Request a <span style={goldItalic}>Quote</span>
+          </h2>
+
+          <form style={quoteForm} onSubmit={submitQuote}>
 
           {selectedQuoteProduct ? (
             <div style={selectedProductBox}>
@@ -711,7 +762,18 @@ export default function Home() {
             <Send size={17} />
             {sending ? "Sending..." : "Send Quote Request"}
           </button>
-        </form>
+
+          <a
+            href="/poloko-tombstones-payment-options.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="payment-pdf-link"
+          >
+            <span>Payment Options</span>
+            <span className="payment-pdf-link-arrow" aria-hidden="true">→</span>
+          </a>
+          </form>
+        </div>
       </section>
 
       <footer style={footer}>
@@ -1297,8 +1359,8 @@ const selectedProductMeta: React.CSSProperties = {
   margin: 0,
 };
 
-const formSmallLabel: React.CSSProperties = {
-  ...smallLabel,
+const formColumnTitle: React.CSSProperties = {
+  ...sectionTitle,
   marginBottom: "22px",
 };
 

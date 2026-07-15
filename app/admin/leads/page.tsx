@@ -1,6 +1,7 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Dynamic Supabase images intentionally retain the existing rendering. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -49,25 +50,7 @@ export default function AdminLeadsPage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    checkSession();
-  }, []);
-
-  async function checkSession() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      router.push("/admin/login");
-      return;
-    }
-
-    setChecking(false);
-    fetchLeads();
-  }
-
-  async function fetchLeads() {
+  const fetchLeads = useCallback(async () => {
     setLoading(true);
 
     const { data, error } = await supabase
@@ -105,7 +88,25 @@ export default function AdminLeadsPage() {
     }
 
     setLeads((data as unknown as Lead[]) || []);
-  }
+  }, []);
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/admin/login");
+        return;
+      }
+
+      setChecking(false);
+      await fetchLeads();
+    }
+
+    void checkSession();
+  }, [fetchLeads, router]);
 
   async function updateLeadStatus(id: string, status: string) {
     const { error } = await supabase

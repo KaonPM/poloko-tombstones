@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import jsPDF from "jspdf";
@@ -38,6 +39,8 @@ type QuoteItem = {
   unit_price: number;
 };
 
+const quoteStatuses = ["Draft", "Sent", "Accepted", "Declined", "Expired"];
+
 function AdminQuotesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -48,6 +51,7 @@ function AdminQuotesPageContent() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [emailingQuoteId, setEmailingQuoteId] = useState<string | null>(null);
 
   const [item, setItem] = useState<QuoteItem>({
     item_name: "",
@@ -59,26 +63,7 @@ function AdminQuotesPageContent() {
   const [depositPercentage, setDepositPercentage] = useState(50);
   const [notes, setNotes] = useState("Quote valid for 30 days.");
 
-  useEffect(() => {
-    checkSession();
-  }, []);
-
-  async function checkSession() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      router.push("/admin/login");
-      return;
-    }
-
-    setChecking(false);
-    fetchLeads();
-    fetchQuotes();
-  }
-
-  async function fetchLeads() {
+  const fetchLeads = useCallback(async () => {
     const { data, error } = await supabase
       .from("poloko_leads")
       .select(
@@ -117,9 +102,9 @@ function AdminQuotesPageContent() {
         });
       }
     }
-  }
+  }, [leadFromUrl]);
 
-  async function fetchQuotes() {
+  const fetchQuotes = useCallback(async () => {
     const { data, error } = await supabase
       .from("poloko_quotes")
       .select("*")
@@ -131,7 +116,25 @@ function AdminQuotesPageContent() {
     }
 
     setQuotes(data || []);
-  }
+  }, []);
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/admin/login");
+        return;
+      }
+
+      setChecking(false);
+      await Promise.all([fetchLeads(), fetchQuotes()]);
+    }
+
+    void checkSession();
+  }, [fetchLeads, fetchQuotes, router]);
 
   function generateQuoteNumber() {
     const year = new Date().getFullYear();
@@ -170,7 +173,7 @@ function AdminQuotesPageContent() {
         total_amount: totalAmount,
         deposit_amount: depositAmount,
         balance_amount: balanceAmount,
-        status: "Draft",
+        status: "Sent",
         valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
           .toISOString()
           .split("T")[0],
@@ -202,7 +205,10 @@ function AdminQuotesPageContent() {
       return;
     }
 
-    await supabase.from("poloko_leads").update({ status: "Quoted" }).eq("id", lead.id);
+    await supabase
+      .from("poloko_leads")
+      .update({ status: "Quote Sent" })
+      .eq("id", lead.id);
 
     setSaving(false);
     alert("Quote created successfully.");
@@ -216,17 +222,12 @@ function AdminQuotesPageContent() {
     fetchLeads();
   }
 
-  async function downloadQuotePdf(quote: Quote) {
+  async function buildQuotePdf(quote: Quote) {
     const doc = new jsPDF("p", "mm", "a4");
     const logoUrl = "/poloko-tombstones-logo.png";
-
-    try {
-      const logo = await loadImageAsBase64(logoUrl);
-      doc.addImage(logo, "PNG", 60, 80, 90, 90, undefined, "FAST");
-      doc.addImage(logo, "PNG", 15, 12, 32, 32, undefined, "FAST");
-    } catch {
-      // Continue without logo if unavailable.
-    }
+    const logo = await loadImageAsBase64(logoUrl);
+    doc.addImage(logo, "PNG", 60, 80, 90, 90, undefined, "FAST");
+    doc.addImage(logo, "PNG", 15, 12, 32, 32, undefined, "FAST");
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
@@ -264,16 +265,144 @@ function AdminQuotesPageContent() {
     doc.setFontSize(9);
     doc.text("Thank you for choosing Poloko Tombstones.", 15, 280);
 
+    const total = Number(quote.total_amount);
+    const deposit = Number(quote.deposit_amount);
+    const balance = Number(quote.balance_amount);
+    const monthlyThree = balance / 2;
+    const monthlySix = balance / 5;
+
+    doc.addPage();
+    doc.setFillColor(242, 239, 229);
+    doc.rect(0, 0, 210, 297, "F");
+
+    doc.addImage(logo, "PNG", 82, 10, 46, 46, undefined, "FAST");
+
+    doc.setTextColor(30, 29, 27);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("PAYMENT OPTIONS", 105, 68, { align: "center" });
+    doc.setDrawColor(201, 155, 54);
+    doc.line(76, 73, 134, 73);
+
+    const drawOption = (
+      x: number,
+      y: number,
+      heading: string,
+      lines: string[]
+    ) => {
+      doc.setDrawColor(201, 155, 54);
+      doc.roundedRect(x, y, 85, 35, 4, 4);
+      doc.setTextColor(183, 137, 46);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(heading, x + 5, y + 8);
+      doc.setTextColor(30, 29, 27);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      lines.forEach((line, index) => doc.text(line, x + 5, y + 17 + index * 6));
+    };
+
+    drawOption(15, 82, "OPTION 1 - FULL PAYMENT", [
+      "Pay the full amount upfront.",
+      `Total: R${total.toFixed(2)}`,
+    ]);
+    drawOption(110, 82, "OPTION 2 - 50 / 50", [
+      `Deposit: R${deposit.toFixed(2)}`,
+      `Final: R${balance.toFixed(2)} on completion`,
+    ]);
+    drawOption(15, 123, "OPTION 3 - LAY-BY (3 PAYMENTS)", [
+      `Deposit: R${deposit.toFixed(2)}`,
+      `Then: 2 x R${monthlyThree.toFixed(2)} monthly`,
+    ]);
+    drawOption(110, 123, "OPTION 4 - LAY-BY (6 PAYMENTS)", [
+      `Deposit: R${deposit.toFixed(2)}`,
+      `Then: 5 x R${monthlySix.toFixed(2)} monthly`,
+    ]);
+
+    doc.setTextColor(183, 137, 46);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("BANKING DETAILS", 15, 174);
+    doc.line(15, 178, 195, 178);
+    doc.setTextColor(30, 29, 27);
+    doc.setFontSize(9);
+    doc.text("BANK", 15, 187);
+    doc.text("ACCOUNT NAME", 70, 187);
+    doc.text("ACCOUNT NUMBER", 135, 187);
+    doc.setFont("helvetica", "normal");
+    doc.text("Capitec Business", 15, 193);
+    doc.text("Poloko Tombstones", 70, 193);
+    doc.text("1055336916", 135, 193);
+    doc.setFont("helvetica", "bold");
+    doc.text("ACCOUNT TYPE", 15, 204);
+    doc.text("REFERENCE", 70, 204);
+    doc.text("PROOF OF PAYMENT", 135, 204);
+    doc.setFont("helvetica", "normal");
+    doc.text("Business Current", 15, 210);
+    doc.text("Surname & Initials", 70, 210);
+    doc.text("info@polokotombstones.co.za", 135, 210);
+
+    doc.setDrawColor(201, 155, 54);
+    doc.roundedRect(15, 222, 85, 45, 4, 4);
+    doc.roundedRect(110, 222, 85, 45, 4, 4);
+    doc.setFont("helvetica", "bold");
+    doc.text("ACCEPTED PAYMENT METHODS", 20, 231);
+    doc.text("TERMS & CONDITIONS", 115, 231);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(["- EFT / Bank Transfer", "- Cash deposit at a Capitec branch", "- In-store cash payment", "- Cards are not yet available"], 20, 239);
+    doc.text(["- 50% deposit secures the order", "- Work starts after design approval", "- Installation upon full payment", "- Lay-by payments are due monthly", "- Payments and deposits are non-refundable"], 115, 239);
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.text(
+      "Payment towards this quotation confirms acceptance of these payment terms.",
+      105,
+      280,
+      { align: "center" }
+    );
+
+    return doc;
+  }
+
+  async function downloadQuotePdf(quote: Quote) {
+    const doc = await buildQuotePdf(quote);
     doc.save(`${quote.quote_number}.pdf`);
+  }
+
+  async function emailQuotePdf(quote: Quote) {
+    setEmailingQuoteId(quote.id);
+    try {
+      const doc = await buildQuotePdf(quote);
+      const pdfBase64 = doc.output("datauristring").split(",")[1];
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Your admin session has expired.");
+      const response = await fetch("/api/send-formal-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ quoteId: quote.id, pdfBase64 }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Quotation email failed.");
+      if (!result.sent) { alert(result.reason); return; }
+      setQuotes((current) => current.map((item) => item.id === quote.id ? { ...item, status: "Sent" } : item));
+      alert(`Quotation emailed to ${result.email}.`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Quotation email failed.");
+    } finally {
+      setEmailingQuoteId(null);
+    }
   }
 
   async function loadImageAsBase64(url: string): Promise<string> {
     const response = await fetch(url);
+    if (!response.ok) throw new Error(`Unable to load PDF image: ${url}`);
     const blob = await response.blob();
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error(`Unable to read PDF image: ${url}`));
       reader.readAsDataURL(blob);
     });
   }
@@ -281,6 +410,22 @@ function AdminQuotesPageContent() {
   async function logout() {
     await supabase.auth.signOut();
     router.push("/admin/login");
+  }
+
+  async function updateQuoteStatus(id: string, status: string) {
+    const { error } = await supabase
+      .from("poloko_quotes")
+      .update({ status })
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setQuotes((current) =>
+      current.map((quote) => (quote.id === id ? { ...quote, status } : quote))
+    );
   }
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
@@ -443,7 +588,20 @@ function AdminQuotesPageContent() {
         {quotes.map((quote) => (
           <div key={quote.id} style={card}>
             <h3>{quote.quote_number}</h3>
-            <p>Status: {quote.status}</p>
+            <label>
+              Status
+              <select
+                value={quote.status}
+                onChange={(event) =>
+                  void updateQuoteStatus(quote.id, event.target.value)
+                }
+                style={input}
+              >
+                {quoteStatuses.map((status) => (
+                  <option key={status}>{status}</option>
+                ))}
+              </select>
+            </label>
             <p>Total: R{Number(quote.total_amount).toFixed(2)}</p>
             <p>Deposit: R{Number(quote.deposit_amount).toFixed(2)}</p>
             <p>Balance: R{Number(quote.balance_amount).toFixed(2)}</p>
@@ -451,6 +609,18 @@ function AdminQuotesPageContent() {
             <button onClick={() => downloadQuotePdf(quote)} style={button}>
               Download PDF
             </button>
+            <button
+              onClick={() => void emailQuotePdf(quote)}
+              disabled={emailingQuoteId === quote.id}
+              style={secondaryButton}
+            >
+              {emailingQuoteId === quote.id ? "Sending..." : "Email Quote"}
+            </button>
+            {quote.status === "Accepted" && (
+              <Link href="/admin/orders" style={orderLink}>
+                Start Production
+              </Link>
+            )}
           </div>
         ))}
       </section>
@@ -580,4 +750,14 @@ const card: React.CSSProperties = {
   background: "#FFF9EF",
   border: "1px solid #D8C29B",
   padding: "20px",
+};
+
+const orderLink: React.CSSProperties = {
+  display: "inline-block",
+  marginLeft: "10px",
+  padding: "12px 16px",
+  background: "#2E6B3E",
+  color: "white",
+  textDecoration: "none",
+  fontWeight: 700,
 };
