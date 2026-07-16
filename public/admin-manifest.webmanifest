@@ -1,7 +1,7 @@
 {
   "id": "/admin",
-  "name": "Poloko Admin",
-  "short_name": "Poloko Admin",
+  "name": "Poloko Tombstones Admin",
+  "short_name": "Poloko Tombstones Admin",
   "description": "Manage Poloko Tombstones leads, quotations, payments and manufacturing orders.",
   "start_url": "/admin",
   "scope": "/admin",
@@ -19,4 +19,3 @@
     }
   ]
 }
-

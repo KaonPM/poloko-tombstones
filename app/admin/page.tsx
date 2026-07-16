@@ -110,7 +110,7 @@ export default function AdminDashboard() {
       `}</style>
       <div style={header}>
         <div>
-          <h1 style={title}>Poloko Admin Dashboard</h1>
+          <h1 style={title}>Poloko Tombstones Admin Dashboard</h1>
           <p style={subtitle}>
             Manage products, leads, quotes, payments and orders.
           </p>

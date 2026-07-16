@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
   return (
     <main style={page}>
       <form onSubmit={handleLogin} style={box}>
-        <h1 style={title}>Poloko Admin</h1>
+        <h1 style={title}>Poloko Tombstones Admin</h1>
         <p style={text}>Login to manage leads, quotes, products and payments.</p>
 
         <input
