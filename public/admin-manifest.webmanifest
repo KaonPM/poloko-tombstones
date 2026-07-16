@@ -1,0 +1,22 @@
+{
+  "id": "/admin",
+  "name": "Poloko Admin",
+  "short_name": "Poloko Admin",
+  "description": "Manage Poloko Tombstones leads, quotations, payments and manufacturing orders.",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "display": "standalone",
+  "background_color": "#F4EFE6",
+  "theme_color": "#14110D",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/poloko-tombstones-logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
+
