@@ -100,8 +100,10 @@ const box: React.CSSProperties = {
 };
 
 const title: React.CSSProperties = {
-  fontSize: "34px",
+  fontSize: "clamp(18px, 5.2vw, 30px)",
   marginBottom: "10px",
+  whiteSpace: "nowrap",
+  letterSpacing: "-0.5px",
 };
 
 const text: React.CSSProperties = {

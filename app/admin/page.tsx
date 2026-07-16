@@ -107,17 +107,26 @@ export default function AdminDashboard() {
           border-color: #C8A96A !important;
           outline: none;
         }
+        @media (max-width: 700px) {
+          .admin-dashboard-header {
+            flex-direction: column;
+            gap: 14px;
+          }
+          .admin-dashboard-logout {
+            align-self: flex-start;
+          }
+        }
       `}</style>
-      <div style={header}>
+      <div className="admin-dashboard-header" style={header}>
         <div>
-          <h1 style={title}>Poloko Tombstones Admin Dashboard</h1>
+          <h1 style={title}>Poloko Tombstones Admin</h1>
           <p style={subtitle}>
             Manage products, leads, quotes, payments and orders.
           </p>
           <p style={smallText}>Logged in as: {adminEmail}</p>
         </div>
 
-        <button onClick={logout} style={logoutButton}>
+        <button className="admin-dashboard-logout" onClick={logout} style={logoutButton}>
           Logout
         </button>
       </div>
@@ -261,9 +270,11 @@ const header: React.CSSProperties = {
 };
 
 const title: React.CSSProperties = {
-  fontSize: "42px",
+  fontSize: "clamp(19px, 5.3vw, 42px)",
   marginBottom: "10px",
   color: "#14110D",
+  whiteSpace: "nowrap",
+  letterSpacing: "-0.7px",
 };
 
 const subtitle: React.CSSProperties = {
