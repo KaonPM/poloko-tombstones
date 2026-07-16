@@ -591,7 +591,10 @@ function PdfContactPage() {
 
         <div style={pdfContactBoxLight}>
           <h3>Ganyesa Branch</h3>
-          <p>Phohung Section</p>
+          <p>Front opposite House J 49.</p>
+          <p>UCCSA Church section</p>
+          <p>Ganyesa</p>
+          <p>8613</p>
           <p>082 391 5772</p>
           <p>083 928 0868</p>
           <p>072 736 3463</p>

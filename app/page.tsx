@@ -636,7 +636,12 @@ export default function Home() {
               <MapPin size={20} />
               <div>
                 <h3 style={contactTitle}>Ganyesa</h3>
-                <p style={contactText}>Phohung Section</p>
+                <p style={contactText}>
+                  Front opposite House J 49.<br />
+                  UCCSA Church section<br />
+                  Ganyesa<br />
+                  8613
+                </p>
                 <a href="tel:+27823915772" style={contactLink}>
                   082 391 5772
                 </a>
