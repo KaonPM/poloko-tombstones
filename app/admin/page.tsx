@@ -109,11 +109,18 @@ export default function AdminDashboard() {
         }
         @media (max-width: 700px) {
           .admin-dashboard-header {
-            flex-direction: column;
-            gap: 14px;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: 8px;
+          }
+          .admin-dashboard-header > div {
+            flex: 1;
+            min-width: 0;
           }
           .admin-dashboard-logout {
             align-self: flex-start;
+            padding: 8px 10px !important;
+            font-size: 12px;
           }
         }
       `}</style>
