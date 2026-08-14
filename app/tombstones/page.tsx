@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCatalogueTotal } from "@/lib/catalogue-price";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -42,7 +43,14 @@ export default function TombstonesPage() {
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: false });
 
-    if (!error) setProducts(data || []);
+    if (!error) {
+      setProducts(
+        (data || []).map((product) => ({
+          ...product,
+          price: getCatalogueTotal(product.price),
+        }))
+      );
+    }
     setLoading(false);
   }, []);
 

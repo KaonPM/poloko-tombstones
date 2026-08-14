@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { getCatalogueTotal } from "@/lib/catalogue-price";
 import {
   Menu,
   X,
@@ -128,14 +129,19 @@ export default function Home() {
 
       if (error || !data) return;
 
-      setSelectedQuoteProduct(data);
+      const productWithTotal = {
+        ...data,
+        price: getCatalogueTotal(data.price),
+      };
+
+      setSelectedQuoteProduct(productWithTotal);
 
       setForm((current) => ({
         ...current,
         service: "New Tombstone Sales",
         message:
           `Product of Interest: ${data.title}\n` +
-          `Price: ${data.price || "Quote Required"}\n\n` +
+          `Price: ${productWithTotal.price || "Quote Required"}\n\n` +
           "Please contact me regarding pricing, design options and installation.",
       }));
 
