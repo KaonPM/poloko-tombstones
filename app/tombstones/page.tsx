@@ -232,6 +232,9 @@ export default function TombstonesPage() {
 
                 <h2 style={cardTitle}>{product.title}</h2>
                 <p style={price}>{product.price || "Quote Required"}</p>
+                <p style={installationNote}>
+                  Price includes free installation in local service areas. R10/km applies outside these areas.
+                </p>
                 <p style={description}>{product.description}</p>
 
                 <Link
@@ -298,6 +301,9 @@ export default function TombstonesPage() {
               <p style={category}>{selectedProduct.category}</p>
               <h2 style={modalTitle}>{selectedProduct.title}</h2>
               <p style={price}>{selectedProduct.price || "Quote Required"}</p>
+              <p style={installationNote}>
+                Price includes free installation in local service areas. R10/km applies outside these areas.
+              </p>
               <p style={description}>{selectedProduct.description}</p>
 
               <Link
@@ -545,6 +551,7 @@ function PdfProductPage({
                 Code: {product.product_code}
               </p>
               <p style={pdfProductPrice}>{product.price || "Quote Required"}</p>
+              <p style={pdfInstallationNote}>Free local installation. R10/km outside local areas.</p>
             </div>
           </div>
         ))}
@@ -571,6 +578,12 @@ function PdfProductPage({
               and lasting quality.
             </p>
           </div>
+        </div>
+      ) : null}
+
+      {isLastProductPage ? (
+        <div style={pdfInstallationDisclaimer}>
+          <strong>Installation Notice:</strong> Free installation is included within our local service areas. Installations outside these areas are charged at R10.00 per kilometre, calculated according to the distance from our nearest service point. Long-distance installations may be quoted separately. Contact Poloko Tombstones to confirm whether your location qualifies for free installation and to receive an accurate installation quote.
         </div>
       ) : null}
 
@@ -1038,6 +1051,13 @@ const pdfServiceItemLight: React.CSSProperties = {
   textAlign: "center",
 };
 
+const installationNote: React.CSSProperties = {
+  color: "#7A5A28",
+  fontSize: "12px",
+  lineHeight: 1.5,
+  margin: "-4px 0 10px",
+};
+
 const pdfPaymentTitle: React.CSSProperties = {
   fontSize: "44px",
   margin: "0 0 8px",
@@ -1339,4 +1359,21 @@ const pdfQrText: React.CSSProperties = {
   lineHeight: 1.6,
   maxWidth: "430px",
   margin: "0 auto",
+};
+
+const pdfInstallationNote: React.CSSProperties = {
+  color: "#7A5A28",
+  fontSize: "8px",
+  lineHeight: 1.35,
+  margin: "5px 0 0",
+};
+
+const pdfInstallationDisclaimer: React.CSSProperties = {
+  marginTop: "22px",
+  padding: "14px 16px",
+  border: "1px solid #D8C29B",
+  background: "#FFF9EF",
+  color: "#51483D",
+  fontSize: "11px",
+  lineHeight: 1.55,
 };

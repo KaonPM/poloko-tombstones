@@ -769,6 +769,10 @@ export default function Home() {
             style={textarea}
           />
 
+          <p style={installationDisclaimer}>
+            <strong>Installation Notice:</strong> Free installation is included within our local service areas. Installations outside these areas are charged at R10.00 per kilometre, calculated according to the distance from our nearest service point. Long-distance installations may be quoted separately. Contact Poloko Tombstones to confirm whether your location qualifies for free installation and to receive an accurate installation quote.
+          </p>
+
           <button type="submit" style={submitButton} disabled={sending}>
             <Send size={17} />
             {sending ? "Sending..." : "Send Quote Request"}
@@ -1400,6 +1404,16 @@ const input: React.CSSProperties = {
 const textarea: React.CSSProperties = {
   ...input,
   resize: "vertical",
+};
+
+const installationDisclaimer: React.CSSProperties = {
+  margin: "18px 0 0",
+  padding: "14px 16px",
+  border: "1px solid #D8C29B",
+  background: "#FFF9EF",
+  color: "#5C5145",
+  fontSize: "13px",
+  lineHeight: 1.6,
 };
 
 const submitButton: React.CSSProperties = {
