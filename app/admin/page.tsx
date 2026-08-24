@@ -107,7 +107,23 @@ export default function AdminDashboard() {
           border-color: #C8A96A !important;
           outline: none;
         }
+        .admin-stats-grid {
+          grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+        }
+        @media (max-width: 1500px) {
+          .admin-stats-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          }
+        }
+        @media (max-width: 900px) {
+          .admin-stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+        }
         @media (max-width: 700px) {
+          .admin-stats-grid {
+            grid-template-columns: 1fr !important;
+          }
           .admin-dashboard-header {
             flex-direction: row;
             flex-wrap: nowrap;
@@ -143,7 +159,7 @@ export default function AdminDashboard() {
         <h2 style={dashboardSectionTitle}>Sales and production at a glance</h2>
       </div>
 
-      <section style={statsGrid}>
+      <section className="admin-stats-grid" style={statsGrid}>
         <div style={statCard}>
           <h3>Total Leads</h3>
           <p style={statValue}>{stats.totalLeads}</p>
@@ -299,7 +315,7 @@ const dashboardSectionTitle: React.CSSProperties = { margin: 0, color: "#14110D"
 
 const statsGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
   gap: "20px",
   marginBottom: "40px",
 };
