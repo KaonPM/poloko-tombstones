@@ -18,9 +18,10 @@ export async function POST(request: Request) {
     const isProforma = documentKind === "proforma";
 
     const { data, error } = await admin.from("poloko_quotes")
-      .select("quote_number, total_amount, deposit_amount, balance_amount, valid_until, customer:poloko_customers(full_name,email)")
+      .select("quote_number, total_amount, deposit_amount, balance_amount, valid_until, status, customer:poloko_customers(full_name,email)")
       .eq("id", quoteId).single();
     if (error || !data) return NextResponse.json({ error: "Quote not found." }, { status: 404 });
+    if (isProforma && !["Accepted", "Approved"].includes(data.status)) return NextResponse.json({ error: "Accept the quotation before issuing a proforma invoice." }, { status: 409 });
     const customer = first(data.customer as unknown as { full_name: string; email: string | null } | { full_name: string; email: string | null }[] | null);
     if (!customer?.email) return NextResponse.json({ sent: false, reason: "Customer has no email address." });
 

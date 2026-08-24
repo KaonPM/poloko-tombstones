@@ -7,8 +7,9 @@ import { supabase } from "@/lib/supabase";
 
 const stages = ["Confirmed", "Design Approval", "Material Preparation", "Cutting", "Engraving", "Assembly", "Quality Check", "Manufactured"];
 
-type Quote = { id: string; quote_number: string; customer_id: string; status: string; customer: { full_name: string; phone: string }[] | null };
+type Quote = { id: string; quote_number: string; customer_id: string; deposit_amount: number; status: string; customer: { full_name: string; phone: string }[] | null };
 type Order = { id: string; quote_id: string; order_number: string; status: string; due_date: string | null; design_notes: string | null; production_notes: string | null; manufactured_at: string | null; quote: { quote_number: string; customer: { full_name: string; phone: string }[] | null }[] | null };
+type Payment = { quote_id: string; amount: number; payment_type: string };
 
 export default function AdminOrdersPage() {
   const router = useRouter();
@@ -17,23 +18,26 @@ export default function AdminOrdersPage() {
   const [saving, setSaving] = useState(false);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [quoteId, setQuoteId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [designNotes, setDesignNotes] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [quoteResult, orderResult] = await Promise.all([
-      supabase.from("poloko_quotes").select("id, quote_number, customer_id, status, customer:poloko_customers(full_name, phone)").in("status", ["Accepted", "Approved"]).order("created_at", { ascending: false }),
+    const [quoteResult, orderResult, paymentResult] = await Promise.all([
+      supabase.from("poloko_quotes").select("id, quote_number, customer_id, deposit_amount, status, customer:poloko_customers(full_name, phone)").in("status", ["Accepted", "Approved"]).order("created_at", { ascending: false }),
       supabase.from("poloko_orders").select("id, quote_id, order_number, status, due_date, design_notes, production_notes, manufactured_at, quote:poloko_quotes(quote_number, customer:poloko_customers(full_name, phone))").order("created_at", { ascending: false }),
+      supabase.from("poloko_payments").select("quote_id, amount, payment_type"),
     ]);
     setLoading(false);
-    if (quoteResult.error || orderResult.error) {
-      alert(quoteResult.error?.message || orderResult.error?.message);
+    if (quoteResult.error || orderResult.error || paymentResult.error) {
+      alert(quoteResult.error?.message || orderResult.error?.message || paymentResult.error?.message);
       return;
     }
     setQuotes((quoteResult.data as unknown as Quote[]) || []);
     setOrders((orderResult.data as unknown as Order[]) || []);
+    setPayments((paymentResult.data as Payment[]) || []);
   }, []);
 
   useEffect(() => {
@@ -48,8 +52,12 @@ export default function AdminOrdersPage() {
 
   const availableQuotes = useMemo(() => {
     const used = new Set(orders.map((order) => order.quote_id));
-    return quotes.filter((quote) => !used.has(quote.id));
-  }, [orders, quotes]);
+    const paidByQuote = payments.reduce<Record<string, number>>((totals, payment) => {
+      totals[payment.quote_id] = (totals[payment.quote_id] || 0) + (payment.payment_type === "Refund" ? -Number(payment.amount) : Number(payment.amount));
+      return totals;
+    }, {});
+    return quotes.filter((quote) => !used.has(quote.id) && (paidByQuote[quote.id] || 0) >= Number(quote.deposit_amount));
+  }, [orders, payments, quotes]);
 
   async function createOrder(event: React.FormEvent) {
     event.preventDefault();
@@ -89,9 +97,9 @@ export default function AdminOrdersPage() {
   if (checking) return <main style={page}>Checking admin access...</main>;
 
   return <main style={page}>
-    <header style={header}><div><h1 style={title}>Manufacturing Orders</h1><p style={muted}>Track every accepted order until the tombstone is manufactured.</p></div><nav style={nav}><Link href="/admin" style={linkButton}>Dashboard</Link><Link href="/admin/quotes" style={linkButton}>Quotes</Link><Link href="/admin/payments" style={linkButton}>Payments</Link></nav></header>
+    <header style={header}><div><h1 style={title}>Manufacturing Orders</h1><p style={muted}>Track every accepted, deposit-paid order until the tombstone is manufactured.</p></div><nav style={nav}><Link href="/admin" style={linkButton}>Dashboard</Link><Link href="/admin/quotes" style={linkButton}>Quotes</Link><Link href="/admin/payments" style={linkButton}>Payments</Link></nav></header>
     <form onSubmit={createOrder} style={panel}><h2>Start Production Order</h2><div style={formGrid}>
-      <label style={label}>Accepted quote<select required value={quoteId} onChange={(e) => setQuoteId(e.target.value)} style={input}><option value="">Select accepted quote</option>{availableQuotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quote_number} — {quote.customer?.[0]?.full_name || "Customer"}</option>)}</select></label>
+      <label style={label}>Accepted, deposit-paid quotation<select required value={quoteId} onChange={(e) => setQuoteId(e.target.value)} style={input}><option value="">Select paid quotation</option>{availableQuotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quote_number} — {quote.customer?.[0]?.full_name || "Customer"}</option>)}</select></label>
       <label style={label}>Target completion<input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={input} /></label>
     </div><label style={label}>Design / inscription brief<textarea value={designNotes} onChange={(e) => setDesignNotes(e.target.value)} style={input} /></label><button disabled={saving} style={primaryButton}>{saving ? "Creating..." : "Create Production Order"}</button></form>
     <section><h2>Production Pipeline</h2>{loading ? <p>Loading...</p> : orders.length === 0 ? <div style={panel}>No production orders yet. Mark a quote Accepted, then create its order here.</div> : orders.map((order) => {

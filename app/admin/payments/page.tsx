@@ -51,6 +51,7 @@ export default function AdminPaymentsPage() {
       supabase
         .from("poloko_quotes")
         .select("id, quote_number, total_amount, deposit_amount, customer:poloko_customers(full_name)")
+        .in("status", ["Accepted", "Approved"])
         .order("created_at", { ascending: false }),
       supabase
         .from("poloko_payments")
@@ -160,15 +161,15 @@ export default function AdminPaymentsPage() {
   return (
     <main style={page}>
       <header style={header}>
-        <div><h1 style={title}>Payments</h1><p style={muted}>Record deposits, progress payments and balances.</p></div>
+        <div><h1 style={title}>Payments</h1><p style={muted}>Capture payments against accepted quotations and proforma invoices.</p></div>
         <nav style={nav}><Link href="/admin" style={linkButton}>Dashboard</Link><Link href="/admin/orders" style={linkButton}>Orders</Link></nav>
       </header>
 
       <form onSubmit={recordPayment} style={panel}>
         <h2>Record Payment</h2>
         <div style={formGrid}>
-          <label style={label}>Quote<select required value={form.quoteId} onChange={(e) => setForm({ ...form, quoteId: e.target.value })} style={input}>
-            <option value="">Select quote</option>
+          <label style={label}>Accepted quotation / proforma invoice<select required value={form.quoteId} onChange={(e) => setForm({ ...form, quoteId: e.target.value })} style={input}>
+            <option value="">Select accepted quotation</option>
             {quotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quote_number} — {quote.customer?.[0]?.full_name || "Customer"}</option>)}
           </select></label>
           <label style={label}>Amount (R)<input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={input} /></label>

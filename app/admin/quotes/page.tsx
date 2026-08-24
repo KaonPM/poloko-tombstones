@@ -59,6 +59,7 @@ function AdminQuotesPageContent() {
   const [checking, setChecking] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [captureMode, setCaptureMode] = useState<"lead" | "manual">("lead");
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [saving, setSaving] = useState(false);
   const [emailingDocumentKey, setEmailingDocumentKey] = useState<string | null>(null);
@@ -72,6 +73,7 @@ function AdminQuotesPageContent() {
 
   const [depositPercentage, setDepositPercentage] = useState(50);
   const [notes, setNotes] = useState("Quote valid for 30 days.");
+  const [manualCustomer, setManualCustomer] = useState({ fullName: "", phone: "", email: "" });
 
   const fetchLeads = useCallback(async () => {
     const { data, error } = await supabase
@@ -155,24 +157,53 @@ function AdminQuotesPageContent() {
   async function createQuote(e: React.FormEvent) {
     e.preventDefault();
 
-    const lead = leads.find((leadItem) => leadItem.id === selectedLeadId);
-
-    if (!lead) {
-      alert("Please select a lead.");
+    if (!item.item_name || item.unit_price <= 0 || item.quantity <= 0) {
+      alert("Please complete the quote item, quantity and price.");
       return;
     }
 
-    if (!item.item_name || item.unit_price <= 0 || item.quantity <= 0) {
-      alert("Please complete the quote item, quantity and price.");
+    let lead = leads.find((leadItem) => leadItem.id === selectedLeadId);
+    if (captureMode === "lead" && !lead) {
+      alert("Please select a customer enquiry.");
+      return;
+    }
+    if (captureMode === "manual" && (!manualCustomer.fullName.trim() || !manualCustomer.phone.trim())) {
+      alert("Please enter the customer's full name and phone number.");
       return;
     }
 
     const totalAmount = item.quantity * item.unit_price;
     const depositAmount = totalAmount * (depositPercentage / 100);
     const balanceAmount = totalAmount - depositAmount;
-    const quoteNumber = generateQuoteNumber();
-
     setSaving(true);
+    if (captureMode === "manual") {
+      const { data: customer, error: customerError } = await supabase
+        .from("poloko_customers")
+        .insert({ full_name: manualCustomer.fullName.trim(), phone: manualCustomer.phone.trim(), email: manualCustomer.email.trim() || null, location: null })
+        .select("id, full_name, phone, email")
+        .single();
+      if (customerError || !customer) {
+        setSaving(false);
+        alert(customerError?.message || "Customer could not be saved.");
+        return;
+      }
+      const { data: manualLead, error: leadError } = await supabase
+        .from("poloko_leads")
+        .insert({ customer_id: customer.id, interest_type: item.item_name, message: item.description || null, source: "Manual", status: "Quote Sent" })
+        .select("id, customer_id")
+        .single();
+      if (leadError || !manualLead) {
+        setSaving(false);
+        alert(leadError?.message || "Customer enquiry could not be saved.");
+        return;
+      }
+      lead = { id: manualLead.id, customer_id: manualLead.customer_id, interest_type: item.item_name, message: item.description || null, customer: [{ full_name: customer.full_name, phone: customer.phone, email: customer.email }] };
+    }
+    if (!lead) {
+      setSaving(false);
+      return;
+    }
+    const quoteNumber = generateQuoteNumber();
 
     const { data: quote, error: quoteError } = await supabase
       .from("poloko_quotes")
@@ -224,6 +255,8 @@ function AdminQuotesPageContent() {
     alert("Quote created successfully.");
 
     setSelectedLeadId("");
+    setCaptureMode("lead");
+    setManualCustomer({ fullName: "", phone: "", email: "" });
     setItem({ item_name: "", description: "", quantity: 1, unit_price: 0 });
     setDepositPercentage(50);
     setNotes("Quote valid for 30 days.");
@@ -469,9 +502,18 @@ function AdminQuotesPageContent() {
       </div>
 
       <form onSubmit={createQuote} style={formBox}>
-        <h2 style={sectionTitle}>Create Quote</h2>
+        <h2 style={sectionTitle}>Create Formal Quotation</h2>
 
-        <select
+        <div style={captureToggle}>
+          <button type="button" onClick={() => setCaptureMode("lead")} style={captureMode === "lead" ? activeCaptureButton : captureButton}>
+            Use Website Enquiry
+          </button>
+          <button type="button" onClick={() => setCaptureMode("manual")} style={captureMode === "manual" ? activeCaptureButton : captureButton}>
+            Manual Customer Capture
+          </button>
+        </div>
+
+        {captureMode === "lead" ? <select
           value={selectedLeadId}
           onChange={(e) => {
             const newLeadId = e.target.value;
@@ -501,9 +543,13 @@ function AdminQuotesPageContent() {
               </option>
             );
           })}
-        </select>
+        </select> : <div style={formGrid}>
+          <input placeholder="Customer full name" value={manualCustomer.fullName} onChange={(e) => setManualCustomer({ ...manualCustomer, fullName: e.target.value })} required style={input} />
+          <input placeholder="Phone / WhatsApp" value={manualCustomer.phone} onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })} required style={input} />
+          <input type="email" placeholder="Email address (optional)" value={manualCustomer.email} onChange={(e) => setManualCustomer({ ...manualCustomer, email: e.target.value })} style={input} />
+        </div>}
 
-        {selectedLead ? (
+        {captureMode === "lead" && selectedLead ? (
           <div style={leadPreview}>
             <p>
               <strong>Customer:</strong> {selectedCustomer?.full_name || "Unknown Customer"}
@@ -586,7 +632,7 @@ function AdminQuotesPageContent() {
         </div>
 
         <button type="submit" disabled={saving} style={button}>
-          {saving ? "Saving Quote..." : "Create Quote"}
+          {saving ? "Saving Quotation..." : "Create Formal Quotation"}
         </button>
       </form>
 
@@ -707,6 +753,12 @@ const formBox: React.CSSProperties = {
   marginBottom: "36px",
 };
 
+const formGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+  gap: "12px",
+};
+
 const input: React.CSSProperties = {
   width: "100%",
   padding: "13px",
@@ -770,6 +822,27 @@ const card: React.CSSProperties = {
   background: "#FFF9EF",
   border: "1px solid #D8C29B",
   padding: "20px",
+};
+
+const captureToggle: React.CSSProperties = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const captureButton: React.CSSProperties = {
+  border: "1px solid #BBA57E",
+  background: "#FFFDF7",
+  color: "#2B241B",
+  padding: "10px 14px",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const activeCaptureButton: React.CSSProperties = {
+  ...captureButton,
+  background: "#14110D",
+  color: "#C8A96A",
 };
 
 const orderLink: React.CSSProperties = {
