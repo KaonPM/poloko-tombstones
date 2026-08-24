@@ -23,6 +23,7 @@ type Lead = {
 type Quote = {
   id: string;
   quote_number: string;
+  customer_id: string;
   total_amount: number;
   deposit_amount: number;
   balance_amount: number;
@@ -31,6 +32,15 @@ type Quote = {
   notes: string | null;
   created_at: string;
 };
+
+type Customer = {
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+};
+
+type StoredQuoteItem = QuoteItem & { total_price: number };
+type DocumentKind = "quotation" | "proforma";
 
 type QuoteItem = {
   item_name: string;
@@ -51,7 +61,7 @@ function AdminQuotesPageContent() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [saving, setSaving] = useState(false);
-  const [emailingQuoteId, setEmailingQuoteId] = useState<string | null>(null);
+  const [emailingDocumentKey, setEmailingDocumentKey] = useState<string | null>(null);
 
   const [item, setItem] = useState<QuoteItem>({
     item_name: "",
@@ -222,175 +232,171 @@ function AdminQuotesPageContent() {
     fetchLeads();
   }
 
-  async function buildQuotePdf(quote: Quote) {
+  function formatMoney(value: number) {
+    return `R${Number(value || 0).toLocaleString("en-ZA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  async function buildQuotePdf(quote: Quote, documentKind: DocumentKind) {
     const doc = new jsPDF("p", "mm", "a4");
     const logoUrl = "/poloko-tombstones-logo.png";
     const logo = await loadImageAsBase64(logoUrl);
-    doc.addImage(logo, "PNG", 60, 80, 90, 90, undefined, "FAST");
-    doc.addImage(logo, "PNG", 15, 12, 32, 32, undefined, "FAST");
+    const [customerResult, itemsResult] = await Promise.all([
+      supabase.from("poloko_customers").select("full_name,phone,email").eq("id", quote.customer_id).single(),
+      supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price").eq("quote_id", quote.id),
+    ]);
+    const customer = (customerResult.data as Customer | null) || { full_name: "Customer", phone: null, email: null };
+    const items = (itemsResult.data as StoredQuoteItem[] | null) || [];
+    const title = documentKind === "quotation" ? "FORMAL QUOTATION" : "PROFORMA INVOICE";
+    const reference = documentKind === "quotation" ? quote.quote_number : `PI-${quote.quote_number.replace(/^PT-/, "")}`;
+    const date = new Date().toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
 
+    doc.setFillColor(20, 17, 13);
+    doc.rect(0, 0, 210, 44, "F");
+    doc.addImage(logo, "PNG", 15, 8, 27, 27, undefined, "FAST");
+    doc.setTextColor(200, 169, 106);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    doc.text("POLOKO TOMBSTONES", 55, 22);
-
-    doc.setFont("helvetica", "normal");
+    doc.text("POLOKO TOMBSTONES", 48, 20);
+    doc.setFont("times", "italic");
     doc.setFontSize(10);
-    doc.text("A legacy carved in stone.", 55, 29);
-    doc.text("Email: info@polokotombstones.co.za", 55, 35);
-    doc.text("Quote Document", 150, 22);
-
-    doc.line(15, 48, 195, 48);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(`Quote No: ${quote.quote_number}`, 15, 60);
-    doc.text(`Status: ${quote.status}`, 15, 68);
-    doc.text(`Valid Until: ${quote.valid_until || "30 days"}`, 15, 76);
-
-    doc.text("Financial Summary", 15, 100);
-
+    doc.text("A Legacy Carved in Stone", 48, 28);
     doc.setFont("helvetica", "normal");
-    doc.text(`Total Amount: R${Number(quote.total_amount).toFixed(2)}`, 15, 112);
-    doc.text(`Deposit Required: R${Number(quote.deposit_amount).toFixed(2)}`, 15, 120);
-    doc.text(`Balance Due: R${Number(quote.balance_amount).toFixed(2)}`, 15, 128);
-
+    doc.setFontSize(7.5);
+    doc.text("Garankuwa: 073 163 3836  |  Ganyesa: 083 928 0868", 48, 35);
+    doc.setTextColor(20, 17, 13);
     doc.setFont("helvetica", "bold");
-    doc.text("Notes", 15, 148);
-
+    doc.setFontSize(17);
+    doc.text(title, 195, 58, { align: "right" });
     doc.setFont("helvetica", "normal");
-    doc.text(quote.notes || "Quote valid for 30 days.", 15, 158, {
-      maxWidth: 170,
+    doc.setFontSize(9);
+    doc.text(`${documentKind === "quotation" ? "Quote" : "Proforma"} No: ${reference}`, 195, 66, { align: "right" });
+    doc.text(`Date: ${date}`, 195, 72, { align: "right" });
+    if (documentKind === "quotation") doc.text(`Valid until: ${quote.valid_until || "30 days"}`, 195, 78, { align: "right" });
+
+    doc.setFillColor(244, 239, 230);
+    doc.roundedRect(15, 55, 78, 35, 2, 2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(155, 116, 52);
+    doc.text("PREPARED FOR", 20, 63);
+    doc.setTextColor(20, 17, 13);
+    doc.setFontSize(11);
+    doc.text(customer.full_name, 20, 70);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    if (customer.phone) doc.text(customer.phone, 20, 77);
+    if (customer.email) doc.text(customer.email, 20, 83);
+
+    const tableY = 102;
+    const columns = [15, 32, 105, 128, 153, 195];
+    doc.setFillColor(20, 17, 13);
+    doc.rect(15, tableY, 180, 10, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    ["ITEM", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT"].forEach((heading, index) => {
+      doc.text(heading, columns[index] + 3, tableY + 6.5);
+    });
+    let y = tableY + 10;
+    const printableItems = items.length ? items : [{ item_name: "Memorial package", description: quote.notes || "Custom tombstone quotation", quantity: 1, unit_price: Number(quote.total_amount), total_price: Number(quote.total_amount) }];
+    printableItems.forEach((item, index) => {
+      const rowHeight = Math.max(13, doc.splitTextToSize(item.description || "-", 66).length * 4 + 6);
+      doc.setFillColor(index % 2 ? 255 : 250, index % 2 ? 252 : 247, index % 2 ? 248 : 239);
+      doc.rect(15, y, 180, rowHeight, "F");
+      doc.setDrawColor(218, 194, 155);
+      doc.rect(15, y, 180, rowHeight);
+      doc.setTextColor(20, 17, 13);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(item.item_name, 18, y + 6);
+      doc.text(doc.splitTextToSize(item.description || "-", 66), 35, y + 6);
+      doc.text(String(item.quantity), 108, y + 6);
+      doc.text(formatMoney(Number(item.unit_price)), 131, y + 6);
+      doc.text(formatMoney(Number(item.total_price)), 192, y + 6, { align: "right" });
+      y += rowHeight;
     });
 
-    doc.setFontSize(9);
-    doc.text("Thank you for choosing Poloko Tombstones.", 15, 280);
-
-    const total = Number(quote.total_amount);
-    const deposit = Number(quote.deposit_amount);
-    const balance = Number(quote.balance_amount);
-    const monthlyThree = balance / 2;
-    const monthlySix = balance / 5;
-
-    doc.addPage();
-    doc.setFillColor(242, 239, 229);
-    doc.rect(0, 0, 210, 297, "F");
-
-    doc.addImage(logo, "PNG", 82, 10, 46, 46, undefined, "FAST");
-
-    doc.setTextColor(30, 29, 27);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.text("PAYMENT OPTIONS", 105, 68, { align: "center" });
-    doc.setDrawColor(201, 155, 54);
-    doc.line(76, 73, 134, 73);
-
-    const drawOption = (
-      x: number,
-      y: number,
-      heading: string,
-      lines: string[]
-    ) => {
-      doc.setDrawColor(201, 155, 54);
-      doc.roundedRect(x, y, 85, 35, 4, 4);
-      doc.setTextColor(183, 137, 46);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text(heading, x + 5, y + 8);
-      doc.setTextColor(30, 29, 27);
-      doc.setFont("helvetica", "normal");
+    const summaryY = y + 12;
+    doc.setDrawColor(218, 194, 155);
+    doc.roundedRect(117, summaryY, 78, documentKind === "quotation" ? 38 : 28, 2, 2);
+    const summary = documentKind === "quotation"
+      ? [["Total", quote.total_amount], ["Deposit required", quote.deposit_amount], ["Balance", quote.balance_amount]]
+      : [["Total due", quote.total_amount], ["Deposit required", quote.deposit_amount]];
+    summary.forEach(([label, value], index) => {
+      const lineY = summaryY + 8 + index * 9;
+      doc.setFont("helvetica", index === summary.length - 1 ? "bold" : "normal");
       doc.setFontSize(9);
-      lines.forEach((line, index) => doc.text(line, x + 5, y + 17 + index * 6));
-    };
+      doc.setTextColor(index === summary.length - 1 ? 155 : 20, index === summary.length - 1 ? 116 : 17, index === summary.length - 1 ? 52 : 13);
+      doc.text(String(label), 122, lineY);
+      doc.text(formatMoney(Number(value)), 190, lineY, { align: "right" });
+    });
 
-    drawOption(15, 82, "OPTION 1 - FULL PAYMENT", [
-      "Pay the full amount upfront.",
-      `Total: R${total.toFixed(2)}`,
-    ]);
-    drawOption(110, 82, "OPTION 2 - 50 / 50", [
-      `Deposit: R${deposit.toFixed(2)}`,
-      `Final: R${balance.toFixed(2)} on completion`,
-    ]);
-    drawOption(15, 123, "OPTION 3 - LAY-BY (3 PAYMENTS)", [
-      `Deposit: R${deposit.toFixed(2)}`,
-      `Then: 2 x R${monthlyThree.toFixed(2)} monthly`,
-    ]);
-    drawOption(110, 123, "OPTION 4 - LAY-BY (6 PAYMENTS)", [
-      `Deposit: R${deposit.toFixed(2)}`,
-      `Then: 5 x R${monthlySix.toFixed(2)} monthly`,
-    ]);
-
-    doc.setTextColor(183, 137, 46);
+    const detailsY = Math.max(summaryY + (documentKind === "quotation" ? 48 : 38), 185);
+    doc.setTextColor(155, 116, 52);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text("BANKING DETAILS", 15, 174);
-    doc.line(15, 178, 195, 178);
-    doc.setTextColor(30, 29, 27);
     doc.setFontSize(9);
-    doc.text("BANK", 15, 187);
-    doc.text("ACCOUNT NAME", 70, 187);
-    doc.text("ACCOUNT NUMBER", 135, 187);
-    doc.setFont("helvetica", "normal");
-    doc.text("Capitec Business", 15, 193);
-    doc.text("Poloko Tombstones", 70, 193);
-    doc.text("1055336916", 135, 193);
-    doc.setFont("helvetica", "bold");
-    doc.text("ACCOUNT TYPE", 15, 204);
-    doc.text("REFERENCE", 70, 204);
-    doc.text("PROOF OF PAYMENT", 135, 204);
-    doc.setFont("helvetica", "normal");
-    doc.text("Business Current", 15, 210);
-    doc.text("Surname & Initials", 70, 210);
-    doc.text("info@polokotombstones.co.za", 135, 210);
-
-    doc.setDrawColor(201, 155, 54);
-    doc.roundedRect(15, 222, 85, 45, 4, 4);
-    doc.roundedRect(110, 222, 85, 45, 4, 4);
-    doc.setFont("helvetica", "bold");
-    doc.text("ACCEPTED PAYMENT METHODS", 20, 231);
-    doc.text("TERMS & CONDITIONS", 115, 231);
+    doc.text("BANKING DETAILS", 15, detailsY);
+    doc.setTextColor(20, 17, 13);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.text(["- EFT / Bank Transfer", "- Cash deposit at a Capitec branch", "- In-store cash payment", "- Cards are not yet available"], 20, 239);
-    doc.text(["- 50% deposit secures the order", "- Work starts after design approval", "- Installation upon full payment", "- Lay-by payments are due monthly", "- Payments and deposits are non-refundable"], 115, 239);
+    doc.text(["Account name: Poloko Tombstones (Pty) Ltd", "Bank: Capitec Business", "Account number: 1055336916", "Branch code: 250 066", `Reference: ${reference}`], 15, detailsY + 7);
+    doc.setTextColor(155, 116, 52);
+    doc.setFont("helvetica", "bold");
+    doc.text("INSTALLATION", 112, detailsY);
+    doc.setTextColor(20, 17, 13);
+    doc.setFont("helvetica", "normal");
+    doc.text(doc.splitTextToSize("Free installation is included within our local service areas. Outside these areas, R10.00 per kilometre applies from our nearest service point. Long-distance installations may be quoted separately.", 82), 112, detailsY + 7);
 
+    doc.setDrawColor(200, 169, 106);
+    doc.line(15, 275, 195, 275);
+    doc.setTextColor(20, 17, 13);
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
-    doc.text(
-      "Payment towards this quotation confirms acceptance of these payment terms.",
-      105,
-      280,
-      { align: "center" }
-    );
+    doc.text(documentKind === "quotation" ? "Thank you for considering Poloko Tombstones. This quotation is subject to the terms stated above." : "Payment confirms acceptance of this proforma invoice and our payment terms.", 105, 282, { align: "center", maxWidth: 175 });
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(155, 116, 52);
+    doc.text("POLOKO TOMBSTONES  |  A LEGACY CARVED IN STONE", 105, 289, { align: "center" });
 
     return doc;
   }
 
   async function downloadQuotePdf(quote: Quote) {
-    const doc = await buildQuotePdf(quote);
-    doc.save(`${quote.quote_number}.pdf`);
+    const doc = await buildQuotePdf(quote, "quotation");
+    doc.save(`${quote.quote_number}-quotation.pdf`);
   }
 
-  async function emailQuotePdf(quote: Quote) {
-    setEmailingQuoteId(quote.id);
+  async function downloadProformaPdf(quote: Quote) {
+    const doc = await buildQuotePdf(quote, "proforma");
+    doc.save(`${quote.quote_number}-proforma-invoice.pdf`);
+  }
+
+  async function emailQuotePdf(quote: Quote, documentKind: DocumentKind) {
+    const documentKey = `${quote.id}-${documentKind}`;
+    setEmailingDocumentKey(documentKey);
     try {
-      const doc = await buildQuotePdf(quote);
+      const doc = await buildQuotePdf(quote, documentKind);
       const pdfBase64 = doc.output("datauristring").split(",")[1];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Your admin session has expired.");
       const response = await fetch("/api/send-formal-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ quoteId: quote.id, pdfBase64 }),
+        body: JSON.stringify({ quoteId: quote.id, pdfBase64, documentKind }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Quotation email failed.");
       if (!result.sent) { alert(result.reason); return; }
-      setQuotes((current) => current.map((item) => item.id === quote.id ? { ...item, status: "Sent" } : item));
-      alert(`Quotation emailed to ${result.email}.`);
+      if (documentKind === "quotation") {
+        setQuotes((current) => current.map((item) => item.id === quote.id ? { ...item, status: "Sent" } : item));
+      }
+      alert(`${documentKind === "quotation" ? "Quotation" : "Proforma invoice"} emailed to ${result.email}.`);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Quotation email failed.");
     } finally {
-      setEmailingQuoteId(null);
+      setEmailingDocumentKey(null);
     }
   }
 
@@ -607,15 +613,29 @@ function AdminQuotesPageContent() {
             <p>Balance: R{Number(quote.balance_amount).toFixed(2)}</p>
 
             <button onClick={() => downloadQuotePdf(quote)} style={button}>
-              Download PDF
+              Download Quotation
             </button>
             <button
-              onClick={() => void emailQuotePdf(quote)}
-              disabled={emailingQuoteId === quote.id}
+              onClick={() => void emailQuotePdf(quote, "quotation")}
+              disabled={emailingDocumentKey === `${quote.id}-quotation`}
               style={secondaryButton}
             >
-              {emailingQuoteId === quote.id ? "Sending..." : "Email Quote"}
+              {emailingDocumentKey === `${quote.id}-quotation` ? "Sending..." : "Email Quotation"}
             </button>
+            {quote.status === "Accepted" && (
+              <>
+                <button onClick={() => downloadProformaPdf(quote)} style={button}>
+                  Download Proforma Invoice
+                </button>
+                <button
+                  onClick={() => void emailQuotePdf(quote, "proforma")}
+                  disabled={emailingDocumentKey === `${quote.id}-proforma`}
+                  style={secondaryButton}
+                >
+                  {emailingDocumentKey === `${quote.id}-proforma` ? "Sending..." : "Email Proforma Invoice"}
+                </button>
+              </>
+            )}
             {quote.status === "Accepted" && (
               <Link href="/admin/orders" style={orderLink}>
                 Start Production
