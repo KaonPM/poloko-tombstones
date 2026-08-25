@@ -30,6 +30,7 @@ type Quote = {
   status: string;
   valid_until: string | null;
   notes: string | null;
+  document_type: "Memorial" | "Raw Materials";
   created_at: string;
 };
 
@@ -39,7 +40,7 @@ type Customer = {
   email: string | null;
 };
 
-type StoredQuoteItem = QuoteItem & { total_price: number };
+type StoredQuoteItem = Omit<QuoteItem, "material" | "dimensions" | "square_meters" | "kilograms"> & { total_price: number; material: string | null; dimensions: string | null; square_meters: number | null; kilograms: number | null };
 type DocumentKind = "quotation" | "proforma";
 
 type QuoteItem = {
@@ -47,6 +48,10 @@ type QuoteItem = {
   description: string;
   quantity: number;
   unit_price: number;
+  material: string;
+  dimensions: string;
+  square_meters: number | "";
+  kilograms: number | "";
 };
 
 const quoteStatuses = ["Draft", "Sent", "Accepted", "Declined", "Expired"];
@@ -69,8 +74,13 @@ function AdminQuotesPageContent() {
     description: "",
     quantity: 1,
     unit_price: 0,
+    material: "",
+    dimensions: "",
+    square_meters: "",
+    kilograms: "",
   });
 
+  const [documentType, setDocumentType] = useState<"Memorial" | "Raw Materials">("Memorial");
   const [depositPercentage, setDepositPercentage] = useState(50);
   const [notes, setNotes] = useState("Quote valid for 30 days.");
   const [manualCustomer, setManualCustomer] = useState({ fullName: "", phone: "", email: "" });
@@ -111,6 +121,10 @@ function AdminQuotesPageContent() {
           description: matchingLead.message || "",
           quantity: 1,
           unit_price: 0,
+          material: "",
+          dimensions: "",
+          square_meters: "",
+          kilograms: "",
         });
       }
     }
@@ -214,6 +228,7 @@ function AdminQuotesPageContent() {
         total_amount: totalAmount,
         deposit_amount: depositAmount,
         balance_amount: balanceAmount,
+        document_type: documentType,
         status: "Sent",
         valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
           .toISOString()
@@ -238,6 +253,10 @@ function AdminQuotesPageContent() {
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: totalAmount,
+        material: documentType === "Raw Materials" ? item.material || null : null,
+        dimensions: documentType === "Raw Materials" ? item.dimensions || null : null,
+        square_meters: documentType === "Raw Materials" && item.square_meters !== "" ? Number(item.square_meters) : null,
+        kilograms: documentType === "Raw Materials" && item.kilograms !== "" ? Number(item.kilograms) : null,
       });
 
     if (itemError) {
@@ -257,7 +276,8 @@ function AdminQuotesPageContent() {
     setSelectedLeadId("");
     setCaptureMode("lead");
     setManualCustomer({ fullName: "", phone: "", email: "" });
-    setItem({ item_name: "", description: "", quantity: 1, unit_price: 0 });
+    setItem({ item_name: "", description: "", quantity: 1, unit_price: 0, material: "", dimensions: "", square_meters: "", kilograms: "" });
+    setDocumentType("Memorial");
     setDepositPercentage(50);
     setNotes("Quote valid for 30 days.");
 
@@ -278,11 +298,12 @@ function AdminQuotesPageContent() {
     const logo = await loadImageAsBase64(logoUrl);
     const [customerResult, itemsResult] = await Promise.all([
       supabase.from("poloko_customers").select("full_name,phone,email").eq("id", quote.customer_id).single(),
-      supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price").eq("quote_id", quote.id),
+      supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price,material,dimensions,square_meters,kilograms").eq("quote_id", quote.id),
     ]);
     const customer = (customerResult.data as Customer | null) || { full_name: "Customer", phone: null, email: null };
     const items = (itemsResult.data as StoredQuoteItem[] | null) || [];
     const title = documentKind === "quotation" ? "FORMAL QUOTATION" : "PROFORMA INVOICE";
+    const isRawMaterials = quote.document_type === "Raw Materials";
     const reference = documentKind === "quotation" ? quote.quote_number : `PI-${quote.quote_number.replace(/^PT-/, "")}`;
     const date = new Date().toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
 
@@ -324,31 +345,41 @@ function AdminQuotesPageContent() {
     if (customer.email) doc.text(customer.email, 20, 83);
 
     const tableY = 102;
-    const columns = [15, 32, 105, 128, 153, 195];
     doc.setFillColor(20, 17, 13);
     doc.rect(15, tableY, 180, 10, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    ["ITEM", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT"].forEach((heading, index) => {
-      doc.text(heading, columns[index] + 3, tableY + 6.5);
-    });
+    doc.setFontSize(isRawMaterials ? 5.8 : 7.5);
+    const columns = isRawMaterials ? [15, 32, 58, 91, 112, 128, 145, 170] : [15, 32, 105, 128, 153];
+    const headings = isRawMaterials ? ["ITEM", "MATERIAL", "DIMENSIONS", "QTY", "M2", "KG", "UNIT PRICE", "AMOUNT"] : ["ITEM", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT"];
+    headings.forEach((heading, index) => doc.text(heading, columns[index] + 3, tableY + 6.5));
     let y = tableY + 10;
-    const printableItems = items.length ? items : [{ item_name: "Memorial package", description: quote.notes || "Custom tombstone quotation", quantity: 1, unit_price: Number(quote.total_amount), total_price: Number(quote.total_amount) }];
+    const printableItems: StoredQuoteItem[] = items.length ? items : [{ item_name: isRawMaterials ? "Raw material supply" : "Memorial package", description: quote.notes || "Custom tombstone quotation", quantity: 1, unit_price: Number(quote.total_amount), total_price: Number(quote.total_amount), material: null, dimensions: null, square_meters: null, kilograms: null }];
     printableItems.forEach((item, index) => {
-      const rowHeight = Math.max(13, doc.splitTextToSize(item.description || "-", 66).length * 4 + 6);
+      const rowHeight = isRawMaterials ? 14 : Math.max(13, doc.splitTextToSize(item.description || "-", 66).length * 4 + 6);
       doc.setFillColor(index % 2 ? 255 : 250, index % 2 ? 252 : 247, index % 2 ? 248 : 239);
       doc.rect(15, y, 180, rowHeight, "F");
       doc.setDrawColor(218, 194, 155);
       doc.rect(15, y, 180, rowHeight);
       doc.setTextColor(20, 17, 13);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(item.item_name, 18, y + 6);
-      doc.text(doc.splitTextToSize(item.description || "-", 66), 35, y + 6);
-      doc.text(String(item.quantity), 108, y + 6);
-      doc.text(formatMoney(Number(item.unit_price)), 131, y + 6);
-      doc.text(formatMoney(Number(item.total_price)), 192, y + 6, { align: "right" });
+      doc.setFontSize(isRawMaterials ? 6.5 : 8);
+      if (isRawMaterials) {
+        doc.text(doc.splitTextToSize(item.item_name, 22), 18, y + 5);
+        doc.text(doc.splitTextToSize(item.material || "-", 23), 35, y + 5);
+        doc.text(doc.splitTextToSize(item.dimensions || "-", 27), 61, y + 5);
+        doc.text(String(item.quantity), 94, y + 6);
+        doc.text(item.square_meters === null ? "-" : Number(item.square_meters).toFixed(3), 115, y + 6);
+        doc.text(item.kilograms === null ? "-" : Number(item.kilograms).toFixed(1), 131, y + 6);
+        doc.text(formatMoney(Number(item.unit_price)), 148, y + 6);
+        doc.text(formatMoney(Number(item.total_price)), 192, y + 6, { align: "right" });
+      } else {
+        doc.text(item.item_name, 18, y + 6);
+        doc.text(doc.splitTextToSize(item.description || "-", 66), 35, y + 6);
+        doc.text(String(item.quantity), 108, y + 6);
+        doc.text(formatMoney(Number(item.unit_price)), 131, y + 6);
+        doc.text(formatMoney(Number(item.total_price)), 192, y + 6, { align: "right" });
+      }
       y += rowHeight;
     });
 
@@ -376,6 +407,7 @@ function AdminQuotesPageContent() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.text(["Account name: Poloko Tombstones (Pty) Ltd", "Bank: Capitec Business", "Account number: 1055336916", "Branch code: 250 066", `Reference: ${reference}`], 15, detailsY + 7);
+    doc.text("VAT: Not registered - no VAT charged", 15, detailsY + 42);
     doc.setTextColor(155, 116, 52);
     doc.setFont("helvetica", "bold");
     doc.text("INSTALLATION", 112, detailsY);
@@ -504,6 +536,14 @@ function AdminQuotesPageContent() {
       <form onSubmit={createQuote} style={formBox}>
         <h2 style={sectionTitle}>Create Formal Quotation</h2>
 
+        <label style={formLabel}>
+          Document type
+          <select value={documentType} onChange={(e) => setDocumentType(e.target.value as "Memorial" | "Raw Materials")} style={input}>
+            <option value="Memorial">Memorial / Tombstone</option>
+            <option value="Raw Materials">Raw Materials</option>
+          </select>
+        </label>
+
         <div style={captureToggle}>
           <button type="button" onClick={() => setCaptureMode("lead")} style={captureMode === "lead" ? activeCaptureButton : captureButton}>
             Use Website Enquiry
@@ -527,6 +567,10 @@ function AdminQuotesPageContent() {
                 description: selected.message || "",
                 quantity: 1,
                 unit_price: 0,
+                material: "",
+                dimensions: "",
+                square_meters: "",
+                kilograms: "",
               });
             }
           }}
@@ -580,6 +624,15 @@ function AdminQuotesPageContent() {
           onChange={(e) => setItem({ ...item, description: e.target.value })}
           style={textarea}
         />
+
+        {documentType === "Raw Materials" ? (
+          <div style={formGrid}>
+            <input placeholder="Material, e.g. Rustenburg Black Granite" value={item.material} onChange={(e) => setItem({ ...item, material: e.target.value })} style={input} />
+            <input placeholder="L x W x H, e.g. 80 x 60 x 5 cm" value={item.dimensions} onChange={(e) => setItem({ ...item, dimensions: e.target.value })} style={input} />
+            <input type="number" min="0" step="0.001" placeholder="Square metres (m²)" value={item.square_meters} onChange={(e) => setItem({ ...item, square_meters: e.target.value === "" ? "" : Number(e.target.value) })} style={input} />
+            <input type="number" min="0" step="0.001" placeholder="Weight (kg)" value={item.kilograms} onChange={(e) => setItem({ ...item, kilograms: e.target.value === "" ? "" : Number(e.target.value) })} style={input} />
+          </div>
+        ) : null}
 
         <input
           type="number"
@@ -640,6 +693,7 @@ function AdminQuotesPageContent() {
         {quotes.map((quote) => (
           <div key={quote.id} style={card}>
             <h3>{quote.quote_number}</h3>
+            <p style={documentTypeLabel}>{quote.document_type === "Raw Materials" ? "Raw Materials" : "Memorial / Tombstone"}</p>
             <label>
               Status
               <select
@@ -759,6 +813,13 @@ const formGrid: React.CSSProperties = {
   gap: "12px",
 };
 
+const formLabel: React.CSSProperties = {
+  display: "grid",
+  gap: "7px",
+  color: "#5C5145",
+  fontWeight: 700,
+};
+
 const input: React.CSSProperties = {
   width: "100%",
   padding: "13px",
@@ -822,6 +883,15 @@ const card: React.CSSProperties = {
   background: "#FFF9EF",
   border: "1px solid #D8C29B",
   padding: "20px",
+};
+
+const documentTypeLabel: React.CSSProperties = {
+  margin: "-6px 0 14px",
+  color: "#9B7434",
+  fontSize: "12px",
+  fontWeight: 700,
+  letterSpacing: "1px",
+  textTransform: "uppercase",
 };
 
 const captureToggle: React.CSSProperties = {
