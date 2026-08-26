@@ -4,6 +4,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import PaginationControls from "@/components/admin/PaginationControls";
+
+type Related<T> = T | T[] | null;
 
 type Lead = {
   id: string;
@@ -12,23 +15,8 @@ type Lead = {
   source: string | null;
   status: string;
   created_at: string;
-  customer:
-    | {
-        full_name: string;
-        phone: string;
-        email: string | null;
-        location: string | null;
-      }[]
-    | null;
-  product:
-    | {
-        title: string;
-        category: string;
-        price: string | null;
-        image_url: string | null;
-        product_code: string | null;
-      }[]
-    | null;
+  customer: Related<{ full_name: string; phone: string; email: string | null; location: string | null }>;
+  product: Related<{ title: string; category: string; price: string | null; image_url: string | null; product_code: string | null }>;
 };
 
 const leadStatuses = [
@@ -41,6 +29,10 @@ const leadStatuses = [
   "Installed",
 ];
 
+function first<T>(value: Related<T>) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export default function AdminLeadsPage() {
   const router = useRouter();
 
@@ -49,6 +41,9 @@ export default function AdminLeadsPage() {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  const [leadPage, setLeadPage] = useState(1);
+  const [leadPageSize, setLeadPageSize] = useState(5);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -131,8 +126,8 @@ export default function AdminLeadsPage() {
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      const customer = lead.customer?.[0];
-      const product = lead.product?.[0];
+      const customer = first(lead.customer);
+      const product = first(lead.product);
 
       const matchesStatus =
         statusFilter === "All" || lead.status === statusFilter;
@@ -152,6 +147,8 @@ export default function AdminLeadsPage() {
       return matchesStatus && matchesSearch;
     });
   }, [leads, statusFilter, searchTerm]);
+
+  const paginatedLeads = filteredLeads.slice((leadPage - 1) * leadPageSize, leadPage * leadPageSize);
 
   const totalLeads = leads.length;
   const newLeads = leads.filter((lead) => lead.status === "New").length;
@@ -233,14 +230,14 @@ export default function AdminLeadsPage() {
       <section style={filterBox}>
         <input
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => { setSearchTerm(e.target.value); setLeadPage(1); }}
           placeholder="Search by customer, phone, product, product code, or message"
           style={input}
         />
 
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => { setStatusFilter(e.target.value); setLeadPage(1); }}
           style={input}
         >
           <option value="All">All Statuses</option>
@@ -253,9 +250,10 @@ export default function AdminLeadsPage() {
       {loading ? <p style={text}>Loading quote requests...</p> : null}
 
       <section style={grid}>
-        {filteredLeads.map((lead) => {
-          const customer = lead.customer?.[0];
-          const product = lead.product?.[0];
+        {paginatedLeads.map((lead) => {
+          const customer = first(lead.customer);
+          const product = first(lead.product);
+          const isExpanded = expandedLeadId === lead.id;
 
           return (
             <div key={lead.id} style={card}>
@@ -267,11 +265,15 @@ export default function AdminLeadsPage() {
                   <p style={smallText}>{lead.interest_type}</p>
                 </div>
 
-                <span style={getStatusBadgeStyle(lead.status)}>
-                  {lead.status}
-                </span>
+                <div style={rowActions}>
+                  <span style={getStatusBadgeStyle(lead.status)}>{lead.status}</span>
+                  <button type="button" onClick={() => setExpandedLeadId((current) => current === lead.id ? null : lead.id)} style={viewButton} aria-expanded={isExpanded}>
+                    {isExpanded ? "Close" : "View"}
+                  </button>
+                </div>
               </div>
 
+              {isExpanded ? <>
               {product?.image_url ? (
                 <img
                   src={product.image_url}
@@ -360,10 +362,20 @@ export default function AdminLeadsPage() {
                   WhatsApp Customer
                 </a>
               ) : null}
+              </> : null}
             </div>
           );
         })}
       </section>
+
+      <PaginationControls
+        itemLabel="leads"
+        page={leadPage}
+        pageSize={leadPageSize}
+        totalItems={filteredLeads.length}
+        onPageChange={setLeadPage}
+        onPageSizeChange={(pageSize) => { setLeadPageSize(pageSize); setLeadPage(1); }}
+      />
 
       {!loading && filteredLeads.length === 0 ? (
         <p style={text}>No quote requests found for the selected filters.</p>
@@ -580,3 +592,6 @@ const whatsappButton: React.CSSProperties = {
   fontWeight: 700,
   marginTop: "10px",
 };
+
+const rowActions: React.CSSProperties = { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" };
+const viewButton: React.CSSProperties = { border: "1px solid #C8A96A", background: "#FFF9EF", color: "#14110D", padding: "6px 10px", cursor: "pointer", fontWeight: 700, fontSize: "12px" };

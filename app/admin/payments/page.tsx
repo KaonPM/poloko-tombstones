@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import PaginationControls from "@/components/admin/PaginationControls";
 
 type Quote = {
   id: string;
@@ -45,6 +46,10 @@ export default function AdminPaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [isPaymentWorkspaceOpen, setIsPaymentWorkspaceOpen] = useState(false);
+  const [positionPage, setPositionPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [positionPageSize, setPositionPageSize] = useState(5);
+  const [historyPageSize, setHistoryPageSize] = useState(5);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -93,6 +98,9 @@ export default function AdminPaymentsPage() {
       return totals;
     }, {});
   }, [payments]);
+
+  const paginatedQuotes = quotes.slice((positionPage - 1) * positionPageSize, positionPage * positionPageSize);
+  const paginatedPayments = payments.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize);
 
   async function recordPayment(event: React.FormEvent) {
     event.preventDefault();
@@ -192,16 +200,17 @@ export default function AdminPaymentsPage() {
 
       <section style={panel}>
         <h2>Payment Position</h2>
-        {loading ? <p>Loading...</p> : quotes.map((quote) => {
+        {loading ? <p>Loading...</p> : paginatedQuotes.map((quote) => {
           const paid = paidByQuote[quote.id] || 0;
           const balance = Number(quote.total_amount) - paid;
           return <article key={quote.id} style={row}><div><strong>{quote.quote_number}</strong><p style={muted}>{quote.customer?.[0]?.full_name || "Customer"}</p></div><div style={amounts}><span>Total: R{Number(quote.total_amount).toFixed(2)}</span><span>Paid: R{paid.toFixed(2)}</span><strong style={{ color: balance <= 0 ? "#2E6B3E" : "#9A5A19" }}>Balance: R{Math.max(0, balance).toFixed(2)}</strong></div></article>;
         })}
+        <PaginationControls itemLabel="payment positions" page={positionPage} pageSize={positionPageSize} totalItems={quotes.length} onPageChange={setPositionPage} onPageSizeChange={(pageSize) => { setPositionPageSize(pageSize); setPositionPage(1); }} />
       </section>
 
       <section style={panel}>
         <h2>Payment History</h2>
-        {payments.length === 0 ? <p style={muted}>No payments recorded.</p> : payments.map((payment) => (
+        {payments.length === 0 ? <p style={muted}>No payments recorded.</p> : paginatedPayments.map((payment) => (
           <article key={payment.id} style={historyRow}>
             <div>
               <strong>{payment.receipt_number}</strong>
@@ -215,6 +224,7 @@ export default function AdminPaymentsPage() {
             </div>
           </article>
         ))}
+        <PaginationControls itemLabel="payment history records" page={historyPage} pageSize={historyPageSize} totalItems={payments.length} onPageChange={setHistoryPage} onPageSizeChange={(pageSize) => { setHistoryPageSize(pageSize); setHistoryPage(1); }} />
       </section>
     </main>
   );

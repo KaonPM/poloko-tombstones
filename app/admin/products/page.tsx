@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import PaginationControls from "@/components/admin/PaginationControls";
 
 type Product = {
   id: string;
@@ -46,6 +47,8 @@ export default function AdminProductsPage() {
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [zoom, setZoom] = useState(1);
   const [isProductWorkspaceOpen, setIsProductWorkspaceOpen] = useState(false);
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(5);
 
   const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -234,6 +237,8 @@ export default function AdminProductsPage() {
     router.push("/admin/login");
   }
 
+  const paginatedProducts = products.slice((productPage - 1) * productPageSize, productPage * productPageSize);
+
   if (checking) {
     return (
       <main style={page}>
@@ -369,7 +374,7 @@ export default function AdminProductsPage() {
       </form>
 
       <section style={grid}>
-        {products.map((product) => (
+        {paginatedProducts.map((product) => (
           <div key={product.id} style={card}>
             {product.image_url ? (
               <button
@@ -428,6 +433,15 @@ export default function AdminProductsPage() {
           </div>
         ))}
       </section>
+
+      <PaginationControls
+        itemLabel="products"
+        page={productPage}
+        pageSize={productPageSize}
+        totalItems={products.length}
+        onPageChange={setProductPage}
+        onPageSizeChange={(pageSize) => { setProductPageSize(pageSize); setProductPage(1); }}
+      />
 
       {viewingProduct ? (
         <div style={modalOverlay} onClick={closeView}>

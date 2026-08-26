@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import PaginationControls from "@/components/admin/PaginationControls";
 
 const stages = ["Confirmed", "Design Approval", "Material Preparation", "Cutting", "Engraving", "Assembly", "Quality Check", "Manufactured"];
 
@@ -23,6 +24,8 @@ export default function AdminOrdersPage() {
   const [dueDate, setDueDate] = useState("");
   const [designNotes, setDesignNotes] = useState("");
   const [isOrderWorkspaceOpen, setIsOrderWorkspaceOpen] = useState(false);
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPageSize, setOrderPageSize] = useState(5);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -59,6 +62,8 @@ export default function AdminOrdersPage() {
     }, {});
     return quotes.filter((quote) => !used.has(quote.id) && (paidByQuote[quote.id] || 0) >= Number(quote.deposit_amount));
   }, [orders, payments, quotes]);
+
+  const paginatedOrders = orders.slice((orderPage - 1) * orderPageSize, orderPage * orderPageSize);
 
   async function createOrder(event: React.FormEvent) {
     event.preventDefault();
@@ -103,7 +108,7 @@ export default function AdminOrdersPage() {
       <label style={label}>Accepted, deposit-paid quotation<select required value={quoteId} onChange={(e) => setQuoteId(e.target.value)} style={input}><option value="">Select paid quotation</option>{availableQuotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quote_number} — {quote.customer?.[0]?.full_name || "Customer"}</option>)}</select></label>
       <label style={label}>Target completion<input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={input} /></label>
     </div><label style={label}>Design / inscription brief<textarea value={designNotes} onChange={(e) => setDesignNotes(e.target.value)} style={input} /></label><button disabled={saving} style={primaryButton}>{saving ? "Creating..." : "Create Production Order"}</button></> : <p style={muted}>Open this workspace to start a deposit-paid production order.</p>}</form>
-    <section><h2>Production Pipeline</h2>{loading ? <p>Loading...</p> : orders.length === 0 ? <div style={panel}>No production orders yet. Mark a quote Accepted, then create its order here.</div> : orders.map((order) => {
+    <section><h2>Production Pipeline</h2>{loading ? <p>Loading...</p> : orders.length === 0 ? <div style={panel}>No production orders yet. Mark a quote Accepted, then create its order here.</div> : paginatedOrders.map((order) => {
       const currentStage = stages.indexOf(order.status);
       const customer = order.quote?.[0]?.customer?.[0];
       return <article key={order.id} style={panel}>
@@ -114,7 +119,7 @@ export default function AdminOrdersPage() {
         <label style={label}>Production notes<textarea defaultValue={order.production_notes || ""} onBlur={(e) => void updateOrder(order, { production_notes: e.target.value || null })} style={input} /></label>
         {order.manufactured_at && <p style={complete}>Manufactured on {new Date(order.manufactured_at).toLocaleDateString("en-ZA")}</p>}
       </article>;
-    })}</section>
+    })}<PaginationControls itemLabel="production orders" page={orderPage} pageSize={orderPageSize} totalItems={orders.length} onPageChange={setOrderPage} onPageSizeChange={(pageSize) => { setOrderPageSize(pageSize); setOrderPage(1); }} /></section>
   </main>;
 }
 

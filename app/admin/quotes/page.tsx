@@ -5,20 +5,17 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import jsPDF from "jspdf";
+import PaginationControls from "@/components/admin/PaginationControls";
 
 type Lead = {
   id: string;
   interest_type: string;
   message: string | null;
   customer_id: string;
-  customer:
-    | {
-        full_name: string;
-        phone: string;
-        email: string | null;
-      }[]
-    | null;
+  customer: Related<{ full_name: string; phone: string | null; email: string | null }>;
 };
+
+type Related<T> = T | T[] | null;
 
 type Quote = {
   id: string;
@@ -39,6 +36,10 @@ type Customer = {
   phone: string | null;
   email: string | null;
 };
+
+function first<T>(value: Related<T> | undefined) {
+  return Array.isArray(value) ? value[0] : value || null;
+}
 
 type StoredQuoteItem = Omit<QuoteItem, "material" | "dimensions" | "square_meters" | "kilograms"> & { total_price: number; material: string | null; dimensions: string | null; square_meters: number | null; kilograms: number | null };
 type DocumentKind = "quotation" | "proforma";
@@ -69,6 +70,8 @@ function AdminQuotesPageContent() {
   const [saving, setSaving] = useState(false);
   const [emailingDocumentKey, setEmailingDocumentKey] = useState<string | null>(null);
   const [isQuoteWorkspaceOpen, setIsQuoteWorkspaceOpen] = useState(false);
+  const [quotePage, setQuotePage] = useState(1);
+  const [quotePageSize, setQuotePageSize] = useState(5);
 
   const [item, setItem] = useState<QuoteItem>({
     item_name: "",
@@ -543,7 +546,8 @@ function AdminQuotesPageContent() {
   }
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
-  const selectedCustomer = selectedLead?.customer?.[0];
+  const selectedCustomer = first(selectedLead?.customer);
+  const paginatedQuotes = quotes.slice((quotePage - 1) * quotePageSize, quotePage * quotePageSize);
 
   if (checking) {
     return (
@@ -634,7 +638,7 @@ function AdminQuotesPageContent() {
         >
           <option value="">Select lead</option>
           {leads.map((lead) => {
-            const customer = lead.customer?.[0];
+            const customer = first(lead.customer);
 
             return (
               <option key={lead.id} value={lead.id}>
@@ -746,7 +750,7 @@ function AdminQuotesPageContent() {
       </form>
 
       <section style={grid}>
-        {quotes.map((quote) => (
+        {paginatedQuotes.map((quote) => (
           <div key={quote.id} style={card}>
             <h3>{quote.quote_number}</h3>
             <p style={documentTypeLabel}>{quote.document_type === "Raw Materials" ? "Raw Materials" : "Memorial / Tombstone"}</p>
@@ -803,6 +807,15 @@ function AdminQuotesPageContent() {
           </div>
         ))}
       </section>
+
+      <PaginationControls
+        itemLabel="quotes"
+        page={quotePage}
+        pageSize={quotePageSize}
+        totalItems={quotes.length}
+        onPageChange={setQuotePage}
+        onPageSizeChange={(pageSize) => { setQuotePageSize(pageSize); setQuotePage(1); }}
+      />
     </main>
   );
 }
