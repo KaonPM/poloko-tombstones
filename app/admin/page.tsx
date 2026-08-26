@@ -9,6 +9,7 @@ export default function AdminDashboard() {
   const router = useRouter();
 
   const [checking, setChecking] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalLeads: 0,
@@ -43,6 +44,12 @@ export default function AdminDashboard() {
       const leadStatuses = leadsResult.data || [];
       const quoteStatuses = quotesResult.data || [];
       const orderStatuses = ordersResult.data || [];
+      const queryError = leadsResult.error || quotesResult.error || ordersResult.error || activityResult.error;
+      if (queryError) {
+        setLoadError(`Dashboard data could not load: ${queryError.message}`);
+        setChecking(false);
+        return;
+      }
       setStats({
         totalLeads: leadStatuses.length,
         newLeads: leadStatuses.filter((lead) => lead.status === "New").length,
@@ -153,6 +160,8 @@ export default function AdminDashboard() {
           Logout
         </button>
       </div>
+
+      {loadError ? <p style={errorMessage}>{loadError} Please sign out and back in. If this continues, contact support with this message.</p> : null}
 
       <div style={sectionHeading}>
         <p style={eyebrow}>TODAY&apos;S OVERVIEW</p>
@@ -307,6 +316,15 @@ const subtitle: React.CSSProperties = {
 const smallText: React.CSSProperties = {
   color: "#6C5A45",
   fontSize: "14px",
+};
+
+const errorMessage: React.CSSProperties = {
+  margin: "0 0 24px",
+  padding: "14px 16px",
+  border: "1px solid #A44A3F",
+  background: "#FCE9E5",
+  color: "#7D3027",
+  lineHeight: 1.5,
 };
 
 const sectionHeading: React.CSSProperties = { marginBottom: "18px" };

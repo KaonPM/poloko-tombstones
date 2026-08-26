@@ -68,6 +68,7 @@ function AdminQuotesPageContent() {
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [saving, setSaving] = useState(false);
   const [emailingDocumentKey, setEmailingDocumentKey] = useState<string | null>(null);
+  const [isQuoteWorkspaceOpen, setIsQuoteWorkspaceOpen] = useState(true);
 
   const [item, setItem] = useState<QuoteItem>({
     item_name: "",
@@ -309,17 +310,17 @@ function AdminQuotesPageContent() {
 
     doc.setFillColor(20, 17, 13);
     doc.rect(0, 0, 210, 44, "F");
-    doc.addImage(logo, "PNG", 15, 8, 27, 27, undefined, "FAST");
+    doc.addImage(logo, "PNG", 15, 6, 32, 32, undefined, "FAST");
     doc.setTextColor(200, 169, 106);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    doc.text("POLOKO TOMBSTONES", 48, 20);
+    doc.text("POLOKO TOMBSTONES", 52, 20);
     doc.setFont("times", "italic");
     doc.setFontSize(10);
-    doc.text("A Legacy Carved in Stone", 48, 28);
+    doc.text("A Legacy Carved in Stone", 52, 28);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
-    doc.text("Garankuwa: 073 163 3836  |  Ganyesa: 083 928 0868", 48, 35);
+    doc.text("Garankuwa: 073 163 3836  |  Ganyesa: 083 928 0868", 52, 35);
     doc.setTextColor(20, 17, 13);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(17);
@@ -385,7 +386,8 @@ function AdminQuotesPageContent() {
 
     const summaryY = y + 12;
     doc.setDrawColor(218, 194, 155);
-    doc.roundedRect(117, summaryY, 78, documentKind === "quotation" ? 38 : 28, 2, 2);
+    const summaryHeight = documentKind === "quotation" ? 52 : 42;
+    doc.roundedRect(117, summaryY, 78, summaryHeight, 2, 2);
     const summary = documentKind === "quotation"
       ? [["Total", quote.total_amount], ["Deposit required", quote.deposit_amount], ["Balance", quote.balance_amount]]
       : [["Total due", quote.total_amount], ["Deposit required", quote.deposit_amount]];
@@ -397,8 +399,18 @@ function AdminQuotesPageContent() {
       doc.text(String(label), 122, lineY);
       doc.text(formatMoney(Number(value)), 190, lineY, { align: "right" });
     });
+    doc.setDrawColor(218, 194, 155);
+    doc.line(122, summaryY + (documentKind === "quotation" ? 33 : 24), 190, summaryY + (documentKind === "quotation" ? 33 : 24));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(155, 116, 52);
+    doc.text("PAYMENT TERMS", 122, summaryY + (documentKind === "quotation" ? 39 : 30));
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.2);
+    doc.setTextColor(20, 17, 13);
+    doc.text(documentKind === "quotation" ? "50% deposit secures the order. Valid for 30 days." : "50% deposit secures the order.", 122, summaryY + (documentKind === "quotation" ? 45 : 36), { maxWidth: 65 });
 
-    const detailsY = Math.max(summaryY + (documentKind === "quotation" ? 48 : 38), 185);
+    const detailsY = Math.max(summaryY + summaryHeight + 10, 185);
     doc.setTextColor(155, 116, 52);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -499,6 +511,37 @@ function AdminQuotesPageContent() {
     );
   }
 
+  async function deleteQuote(quote: Quote) {
+    const confirmed = confirm(
+      `Delete ${quote.quote_number}? This permanently removes the quotation and its line items.`,
+    );
+
+    if (!confirmed) return;
+
+    const { error: itemError } = await supabase
+      .from("poloko_quote_items")
+      .delete()
+      .eq("quote_id", quote.id);
+
+    if (itemError) {
+      alert(itemError.message);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("poloko_quotes")
+      .delete()
+      .eq("id", quote.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setQuotes((current) => current.filter((item) => item.id !== quote.id));
+    alert(`${quote.quote_number} deleted.`);
+  }
+
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
   const selectedCustomer = selectedLead?.customer?.[0];
 
@@ -534,7 +577,19 @@ function AdminQuotesPageContent() {
       </div>
 
       <form onSubmit={createQuote} style={formBox}>
-        <h2 style={sectionTitle}>Create Formal Quotation</h2>
+        <div style={workspaceHeader}>
+          <h2 style={sectionTitle}>Create Formal Quotation</h2>
+          <button
+            type="button"
+            aria-expanded={isQuoteWorkspaceOpen}
+            onClick={() => setIsQuoteWorkspaceOpen((open) => !open)}
+            style={workspacePill}
+          >
+            {isQuoteWorkspaceOpen ? "Close form" : "Open form"}
+          </button>
+        </div>
+
+        {isQuoteWorkspaceOpen ? <>
 
         <label style={formLabel}>
           Document type
@@ -687,6 +742,7 @@ function AdminQuotesPageContent() {
         <button type="submit" disabled={saving} style={button}>
           {saving ? "Saving Quotation..." : "Create Formal Quotation"}
         </button>
+        </> : <p style={workspaceHint}>Open this workspace when you are ready to capture a formal quotation.</p>}
       </form>
 
       <section style={grid}>
@@ -721,6 +777,9 @@ function AdminQuotesPageContent() {
               style={secondaryButton}
             >
               {emailingDocumentKey === `${quote.id}-quotation` ? "Sending..." : "Email Quotation"}
+            </button>
+            <button onClick={() => void deleteQuote(quote)} style={quoteDeleteButton}>
+              Delete Quotation
             </button>
             {quote.status === "Accepted" && (
               <>
@@ -791,6 +850,30 @@ const title: React.CSSProperties = {
 const sectionTitle: React.CSSProperties = {
   fontSize: "24px",
   margin: 0,
+};
+
+const workspaceHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "14px",
+  flexWrap: "wrap",
+};
+
+const workspacePill: React.CSSProperties = {
+  border: "1px solid #14110D",
+  borderRadius: "999px",
+  background: "#FFFDF7",
+  color: "#14110D",
+  padding: "8px 15px",
+  cursor: "pointer",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const workspaceHint: React.CSSProperties = {
+  margin: 0,
+  color: "#6C5A45",
 };
 
 const text: React.CSSProperties = {
@@ -883,6 +966,15 @@ const card: React.CSSProperties = {
   background: "#FFF9EF",
   border: "1px solid #D8C29B",
   padding: "20px",
+};
+
+const quoteDeleteButton: React.CSSProperties = {
+  background: "transparent",
+  color: "#8A2E27",
+  border: "1px solid #B65B52",
+  padding: "12px 16px",
+  cursor: "pointer",
+  fontWeight: 700,
 };
 
 const documentTypeLabel: React.CSSProperties = {
