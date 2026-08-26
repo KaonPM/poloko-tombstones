@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+const ADMIN_EMAIL = "info@polokotombstones.co.za";
 
 function first<T>(value: T | T[] | null): T | null { return Array.isArray(value) ? value[0] || null : value; }
 function esc(value: unknown) { return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }
@@ -11,7 +12,8 @@ function esc(value: unknown) { return String(value || "").replaceAll("&", "&amp;
 export async function POST(request: Request) {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    if (!token || (await admin.auth.getUser(token)).error) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const { data: userResult, error: authError } = token ? await admin.auth.getUser(token) : { data: { user: null }, error: true };
+    if (authError || userResult.user?.email?.toLowerCase() !== ADMIN_EMAIL) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     const { quoteId, pdfBase64, documentKind }: { quoteId?: string; pdfBase64?: string; documentKind?: "quotation" | "proforma" } = await request.json();
     if (!quoteId || !pdfBase64) return NextResponse.json({ error: "Quote and PDF are required." }, { status: 400 });
     if (documentKind && documentKind !== "quotation" && documentKind !== "proforma") return NextResponse.json({ error: "Invalid document type." }, { status: 400 });

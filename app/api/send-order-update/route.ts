@@ -4,12 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+const ADMIN_EMAIL = "info@polokotombstones.co.za";
 function first<T>(value: T | T[] | null): T | null { return Array.isArray(value) ? value[0] || null : value; }
 
 export async function POST(request: Request) {
   try {
     const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    if (!token || (await admin.auth.getUser(token)).error) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const { data: userResult, error: authError } = token ? await admin.auth.getUser(token) : { data: { user: null }, error: true };
+    if (authError || userResult.user?.email?.toLowerCase() !== ADMIN_EMAIL) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     const { orderId }: { orderId?: string } = await request.json();
     const { data, error } = await admin.from("poloko_orders")
       .select("order_number,status,due_date,customer:poloko_customers(full_name,email)")
@@ -26,4 +28,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Order update email could not be sent." }, { status: 500 });
   }
 }
-

@@ -7,8 +7,9 @@ const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+const ADMIN_EMAIL = "info@polokotombstones.co.za";
 
-type Customer = { full_name: string; email: string | null };
+type Customer = { full_name: string; email: string | null; phone: string | null };
 type Quote = {
   quote_number: string;
   total_amount: number;
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
 
     const { data: userResult, error: authError } =
       await supabaseAdmin.auth.getUser(token);
-    if (authError || !userResult.user) {
+    if (authError || userResult.user?.email?.toLowerCase() !== ADMIN_EMAIL) {
       return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
     }
 
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("poloko_payments")
-      .select("id, quote_id, amount, payment_type, payment_method, reference, paid_at, notes, quote:poloko_quotes(quote_number, total_amount, customer:poloko_customers(full_name, email))")
+      .select("id, quote_id, amount, payment_type, payment_method, reference, paid_at, notes, quote:poloko_quotes(quote_number, total_amount, customer:poloko_customers(full_name, email, phone))")
       .eq("id", paymentId)
       .single();
 
@@ -116,6 +117,12 @@ export async function POST(request: Request) {
       <div style="line-height:1.65;">
         <p>Dear ${escapeHtml(customer.full_name)},</p>
         <p>Thank you. We confirm receipt of your payment to Poloko Tombstones.</p>
+        <table role="presentation" style="width:100%;margin:18px 0;border-collapse:collapse;background:#f2efe5;border:1px solid #d3ad58;">
+          <tr><td colspan="2" style="padding:8px 14px;color:#9b7434;font-size:12px;font-weight:bold;letter-spacing:.6px;">CUSTOMER DETAILS</td></tr>
+          <tr><td style="padding:8px 14px;">Customer</td><td style="padding:8px 14px;text-align:right;font-weight:bold;">${escapeHtml(customer.full_name)}</td></tr>
+          <tr><td style="padding:8px 14px;">Email</td><td style="padding:8px 14px;text-align:right;">${escapeHtml(customer.email)}</td></tr>
+          <tr><td style="padding:8px 14px;">Phone</td><td style="padding:8px 14px;text-align:right;">${escapeHtml(customer.phone || "Not supplied")}</td></tr>
+        </table>
         <table role="presentation" style="width:100%;margin:22px 0;border-collapse:collapse;border:1px solid #d3ad58;">
           <tr><td style="padding:10px 14px;color:#9b7434;">Quotation</td><td style="padding:10px 14px;text-align:right;font-weight:bold;">${escapeHtml(quote.quote_number)}</td></tr>
           <tr style="background:#f2efe5;"><td style="padding:10px 14px;color:#9b7434;">Amount received</td><td style="padding:10px 14px;text-align:right;font-weight:bold;">${money(payment.amount)}</td></tr>
@@ -136,7 +143,7 @@ export async function POST(request: Request) {
       to: [customer.email],
       subject: `Payment confirmation - ${quote.quote_number}`,
       html,
-      text: `Payment confirmation\n\nDear ${customer.full_name},\n\nAmount received: ${money(payment.amount)}\nQuotation: ${quote.quote_number}\nPayment type: ${payment.payment_type}\nPayment method: ${payment.payment_method}\nReference: ${payment.reference || "Not supplied"}\nPayment date: ${payment.paid_at}\nTotal paid to date: ${money(totalPaid)}\nRemaining balance: ${money(balance)}\n\nPoloko Tombstones\nA Legacy Carved in Stone`,
+      text: `Payment confirmation\n\nDear ${customer.full_name},\n\nCustomer details\nEmail: ${customer.email}\nPhone: ${customer.phone || "Not supplied"}\n\nAmount received: ${money(payment.amount)}\nQuotation: ${quote.quote_number}\nPayment type: ${payment.payment_type}\nPayment method: ${payment.payment_method}\nReference: ${payment.reference || "Not supplied"}\nPayment date: ${payment.paid_at}\nTotal paid to date: ${money(totalPaid)}\nRemaining balance: ${money(balance)}\n\nPoloko Tombstones\nA Legacy Carved in Stone`,
     });
 
     if (emailError) throw emailError;
@@ -146,4 +153,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: "Payment was saved, but the receipt email could not be sent." }, { status: 500 });
   }
 }
-
