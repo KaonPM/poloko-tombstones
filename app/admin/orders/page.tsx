@@ -22,6 +22,7 @@ export default function AdminOrdersPage() {
   const [quoteId, setQuoteId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [designNotes, setDesignNotes] = useState("");
+  const [isOrderWorkspaceOpen, setIsOrderWorkspaceOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -98,10 +99,10 @@ export default function AdminOrdersPage() {
 
   return <main style={page}>
     <header style={header}><div><h1 style={title}>Manufacturing Orders</h1><p style={muted}>Track every accepted, deposit-paid order until the tombstone is manufactured.</p></div><nav style={nav}><Link href="/admin" style={linkButton}>Dashboard</Link><Link href="/admin/quotes" style={linkButton}>Quotes</Link><Link href="/admin/payments" style={linkButton}>Payments</Link></nav></header>
-    <form onSubmit={createOrder} style={panel}><h2>Start Production Order</h2><div style={formGrid}>
+    <form onSubmit={createOrder} style={panel}><div style={workspaceHeader}><h2 style={workspaceTitle}>Start Production Order</h2><button type="button" aria-expanded={isOrderWorkspaceOpen} onClick={() => setIsOrderWorkspaceOpen((open) => !open)} style={workspacePill}>{isOrderWorkspaceOpen ? "Close form" : "Open form"}</button></div>{isOrderWorkspaceOpen ? <><div style={formGrid}>
       <label style={label}>Accepted, deposit-paid quotation<select required value={quoteId} onChange={(e) => setQuoteId(e.target.value)} style={input}><option value="">Select paid quotation</option>{availableQuotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quote_number} — {quote.customer?.[0]?.full_name || "Customer"}</option>)}</select></label>
       <label style={label}>Target completion<input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={input} /></label>
-    </div><label style={label}>Design / inscription brief<textarea value={designNotes} onChange={(e) => setDesignNotes(e.target.value)} style={input} /></label><button disabled={saving} style={primaryButton}>{saving ? "Creating..." : "Create Production Order"}</button></form>
+    </div><label style={label}>Design / inscription brief<textarea value={designNotes} onChange={(e) => setDesignNotes(e.target.value)} style={input} /></label><button disabled={saving} style={primaryButton}>{saving ? "Creating..." : "Create Production Order"}</button></> : <p style={muted}>Open this workspace to start a deposit-paid production order.</p>}</form>
     <section><h2>Production Pipeline</h2>{loading ? <p>Loading...</p> : orders.length === 0 ? <div style={panel}>No production orders yet. Mark a quote Accepted, then create its order here.</div> : orders.map((order) => {
       const currentStage = stages.indexOf(order.status);
       const customer = order.quote?.[0]?.customer?.[0];
@@ -124,6 +125,9 @@ const muted: React.CSSProperties = { color: "#6C5A45", margin: "6px 0" };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap" };
 const linkButton: React.CSSProperties = { padding: "11px 16px", border: "1px solid #8D744D", color: "#14110D", textDecoration: "none", background: "#FFF9EF" };
 const panel: React.CSSProperties = { background: "#FFF9EF", border: "1px solid #D8C29B", padding: 24, marginBottom: 24 };
+const workspaceHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" };
+const workspaceTitle: React.CSSProperties = { margin: 0 };
+const workspacePill: React.CSSProperties = { border: "1px solid #C8A96A", borderRadius: "999px", background: "#FFF9EF", color: "#14110D", padding: "5px 10px", cursor: "pointer", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" };
 const formGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 };
 const label: React.CSSProperties = { display: "grid", gap: 7, fontWeight: 700, marginBottom: 14 };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid #BBA57E", background: "white", padding: 11, font: "inherit" };

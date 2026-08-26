@@ -45,6 +45,7 @@ export default function AdminProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [isProductWorkspaceOpen, setIsProductWorkspaceOpen] = useState(false);
 
   const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -168,6 +169,7 @@ export default function AdminProductsPage() {
 
   function startEdit(product: Product) {
     setEditingProduct(product);
+    setIsProductWorkspaceOpen(true);
     setViewingProduct(null);
     setZoom(1);
 
@@ -260,9 +262,16 @@ export default function AdminProductsPage() {
       </div>
 
       <form ref={formRef} onSubmit={saveProduct} style={formBox}>
-        <h2 style={sectionTitle}>
-          {editingProduct ? "Edit Product" : "Add Product"}
-        </h2>
+        <div style={workspaceHeader}>
+          <h2 style={sectionTitle}>
+            {editingProduct ? "Edit Product" : "Add Product"}
+          </h2>
+          <button type="button" aria-expanded={isProductWorkspaceOpen} onClick={() => setIsProductWorkspaceOpen((open) => !open)} style={workspacePill}>
+            {isProductWorkspaceOpen ? "Close form" : "Open form"}
+          </button>
+        </div>
+
+        {isProductWorkspaceOpen ? <>
 
         <input
           placeholder="Product title"
@@ -356,6 +365,7 @@ export default function AdminProductsPage() {
             </button>
           ) : null}
         </div>
+        </> : <p style={text}>Open this workspace to add or edit a catalogue product.</p>}
       </form>
 
       <section style={grid}>
@@ -779,6 +789,26 @@ const modalContent: React.CSSProperties = {
 const modalTitle: React.CSSProperties = {
   fontSize: "30px",
   margin: "0 0 10px",
+};
+
+const workspaceHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  flexWrap: "wrap",
+};
+
+const workspacePill: React.CSSProperties = {
+  border: "1px solid #C8A96A",
+  borderRadius: "999px",
+  background: "#FFF9EF",
+  color: "#14110D",
+  padding: "5px 10px",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: "12px",
+  whiteSpace: "nowrap",
 };
 
 const productCode: React.CSSProperties = {

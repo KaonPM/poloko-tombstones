@@ -44,6 +44,7 @@ export default function AdminPaymentsPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [isPaymentWorkspaceOpen, setIsPaymentWorkspaceOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -166,7 +167,13 @@ export default function AdminPaymentsPage() {
       </header>
 
       <form onSubmit={recordPayment} style={panel}>
-        <h2>Record Payment</h2>
+        <div style={workspaceHeader}>
+          <h2 style={workspaceTitle}>Record Payment</h2>
+          <button type="button" aria-expanded={isPaymentWorkspaceOpen} onClick={() => setIsPaymentWorkspaceOpen((open) => !open)} style={workspacePill}>
+            {isPaymentWorkspaceOpen ? "Close form" : "Open form"}
+          </button>
+        </div>
+        {isPaymentWorkspaceOpen ? <>
         <div style={formGrid}>
           <label style={label}>Accepted quotation / proforma invoice<select required value={form.quoteId} onChange={(e) => setForm({ ...form, quoteId: e.target.value })} style={input}>
             <option value="">Select accepted quotation</option>
@@ -180,6 +187,7 @@ export default function AdminPaymentsPage() {
         </div>
         <label style={label}>Notes<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} style={input} /></label>
         <button disabled={saving} style={primaryButton}>{saving ? "Saving..." : "Record Payment"}</button>
+        </> : <p style={muted}>Open this workspace to record a customer payment.</p>}
       </form>
 
       <section style={panel}>
@@ -219,6 +227,9 @@ const muted: React.CSSProperties = { color: "#6C5A45", margin: "6px 0" };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap" };
 const linkButton: React.CSSProperties = { padding: "11px 16px", border: "1px solid #8D744D", color: "#14110D", textDecoration: "none", background: "#FFF9EF" };
 const panel: React.CSSProperties = { background: "#FFF9EF", border: "1px solid #D8C29B", padding: 24, marginBottom: 24 };
+const workspaceHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" };
+const workspaceTitle: React.CSSProperties = { margin: 0 };
+const workspacePill: React.CSSProperties = { border: "1px solid #C8A96A", borderRadius: "999px", background: "#FFF9EF", color: "#14110D", padding: "5px 10px", cursor: "pointer", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" };
 const formGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 };
 const label: React.CSSProperties = { display: "grid", gap: 7, fontWeight: 700, marginBottom: 14 };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid #BBA57E", background: "white", padding: 11, font: "inherit" };

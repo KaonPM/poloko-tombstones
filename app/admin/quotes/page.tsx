@@ -68,7 +68,7 @@ function AdminQuotesPageContent() {
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [saving, setSaving] = useState(false);
   const [emailingDocumentKey, setEmailingDocumentKey] = useState<string | null>(null);
-  const [isQuoteWorkspaceOpen, setIsQuoteWorkspaceOpen] = useState(true);
+  const [isQuoteWorkspaceOpen, setIsQuoteWorkspaceOpen] = useState(false);
 
   const [item, setItem] = useState<QuoteItem>({
     item_name: "",
@@ -861,13 +861,14 @@ const workspaceHeader: React.CSSProperties = {
 };
 
 const workspacePill: React.CSSProperties = {
-  border: "1px solid #14110D",
+  border: "1px solid #C8A96A",
   borderRadius: "999px",
-  background: "#FFFDF7",
+  background: "#FFF9EF",
   color: "#14110D",
-  padding: "8px 15px",
+  padding: "5px 10px",
   cursor: "pointer",
   fontWeight: 700,
+  fontSize: "12px",
   whiteSpace: "nowrap",
 };
 
