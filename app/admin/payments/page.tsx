@@ -12,8 +12,10 @@ type Quote = {
   quote_number: string;
   total_amount: number;
   deposit_amount: number;
-  customer: { full_name: string }[] | null;
+  customer: Related<{ full_name: string }>;
 };
+
+type Related<T> = T | T[] | null;
 
 type Payment = {
   id: string;
@@ -25,8 +27,12 @@ type Payment = {
   reference: string | null;
   paid_at: string;
   notes: string | null;
-  quote: { quote_number: string; total_amount: number; customer: { full_name: string }[] | null }[] | null;
+  quote: Related<{ quote_number: string; total_amount: number; customer: Related<{ full_name: string }> }>;
 };
+
+function first<T>(value: Related<T> | undefined) {
+  return Array.isArray(value) ? value[0] || null : value || null;
+}
 
 const emptyForm = {
   quoteId: "",
@@ -225,8 +231,8 @@ export default function AdminPaymentsPage() {
 
   async function downloadReceipt(payment: Payment) {
     try {
-      const quote = payment.quote?.[0];
-      const customer = quote?.customer?.[0];
+      const quote = first(payment.quote);
+      const customer = first(quote?.customer);
       const totalPaid = paidByQuote[payment.quote_id] || 0;
       const balance = Math.max(0, Number(quote?.total_amount || 0) - totalPaid);
       const doc = new jsPDF("p", "mm", "a4");
@@ -350,7 +356,7 @@ export default function AdminPaymentsPage() {
         <div style={formGrid}>
           <label style={label}>Accepted quotation / proforma invoice<select required value={form.quoteId} onChange={(e) => setForm({ ...form, quoteId: e.target.value })} style={input}>
             <option value="">Select accepted quotation</option>
-            {quotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quote_number} — {quote.customer?.[0]?.full_name || "Customer"}</option>)}
+            {quotes.map((quote) => <option key={quote.id} value={quote.id}>{quote.quote_number} — {first(quote.customer)?.full_name || "Customer"}</option>)}
           </select></label>
           <label style={label}>Amount (R)<input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={input} /></label>
           <label style={label}>Payment type<select value={form.paymentType} onChange={(e) => setForm({ ...form, paymentType: e.target.value })} style={input}>{["Deposit", "Progress", "Balance", "Refund"].map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -368,7 +374,7 @@ export default function AdminPaymentsPage() {
         {loading ? <p>Loading...</p> : paginatedQuotes.map((quote) => {
           const paid = paidByQuote[quote.id] || 0;
           const balance = Number(quote.total_amount) - paid;
-          return <article key={quote.id} style={row}><div><strong>{quote.quote_number}</strong><p style={muted}>{quote.customer?.[0]?.full_name || "Customer"}</p></div><div style={amounts}><span>Total: R{Number(quote.total_amount).toFixed(2)}</span><span>Paid: R{paid.toFixed(2)}</span><strong style={{ color: balance <= 0 ? "#2E6B3E" : "#9A5A19" }}>Balance: R{Math.max(0, balance).toFixed(2)}</strong></div></article>;
+          return <article key={quote.id} style={row}><div><strong>{quote.quote_number}</strong><p style={muted}>{first(quote.customer)?.full_name || "Customer"}</p></div><div style={amounts}><span>Total: R{Number(quote.total_amount).toFixed(2)}</span><span>Paid: R{paid.toFixed(2)}</span><strong style={{ color: balance <= 0 ? "#2E6B3E" : "#9A5A19" }}>Balance: R{Math.max(0, balance).toFixed(2)}</strong></div></article>;
         })}
         <PaginationControls itemLabel="payment positions" page={positionPage} pageSize={positionPageSize} totalItems={quotes.length} onPageChange={setPositionPage} onPageSizeChange={(pageSize) => { setPositionPageSize(pageSize); setPositionPage(1); }} />
       </section>
@@ -379,7 +385,7 @@ export default function AdminPaymentsPage() {
           <article key={payment.id} style={historyRow}>
             <div>
               <strong>{payment.receipt_number}</strong>
-              <p style={muted}>{payment.quote?.[0]?.quote_number} · {payment.quote?.[0]?.customer?.[0]?.full_name || "Customer"}</p>
+              <p style={muted}>{first(payment.quote)?.quote_number || "Quotation not supplied"} · {first(first(payment.quote)?.customer)?.full_name || "Customer"}</p>
             </div>
             <div style={amounts}>
               <span>{payment.paid_at}</span>
