@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import PaginationControls from "@/components/admin/PaginationControls";
+import jsPDF from "jspdf";
 
 type Quote = {
   id: string;
@@ -45,6 +46,9 @@ export default function AdminPaymentsPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [updating, setUpdating] = useState(false);
   const [isPaymentWorkspaceOpen, setIsPaymentWorkspaceOpen] = useState(false);
   const [positionPage, setPositionPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
@@ -165,6 +169,167 @@ export default function AdminPaymentsPage() {
     alert(response.ok && result.sent ? `Receipt emailed to ${result.email}.` : result.reason || result.error || "Receipt could not be sent.");
   }
 
+  function startEditingPayment(payment: Payment) {
+    setEditingPayment(payment);
+    setEditForm({
+      quoteId: payment.quote_id,
+      amount: String(payment.amount),
+      paymentType: payment.payment_type,
+      paymentMethod: payment.payment_method,
+      reference: payment.reference || "",
+      paidAt: payment.paid_at,
+      notes: payment.notes || "",
+    });
+  }
+
+  async function updatePayment(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingPayment || Number(editForm.amount) <= 0) return;
+    setUpdating(true);
+    const { error } = await supabase
+      .from("poloko_payments")
+      .update({
+        amount: Number(editForm.amount),
+        payment_type: editForm.paymentType,
+        payment_method: editForm.paymentMethod,
+        reference: editForm.reference || null,
+        paid_at: editForm.paidAt,
+        notes: editForm.notes || null,
+      })
+      .eq("id", editingPayment.id);
+    setUpdating(false);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setEditingPayment(null);
+    await fetchData();
+    alert("Payment updated. Download the receipt again to use the new details.");
+  }
+
+  function formatMoney(value: number) {
+    return `R${Number(value || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  async function loadImageAsBase64(url: string): Promise<string> {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Unable to load the receipt logo.");
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Unable to prepare the receipt logo."));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function downloadReceipt(payment: Payment) {
+    try {
+      const quote = payment.quote?.[0];
+      const customer = quote?.customer?.[0];
+      const totalPaid = paidByQuote[payment.quote_id] || 0;
+      const balance = Math.max(0, Number(quote?.total_amount || 0) - totalPaid);
+      const doc = new jsPDF("p", "mm", "a4");
+      const logo = await loadImageAsBase64("/poloko-tombstones-logo.png");
+
+      doc.setFillColor(20, 17, 13);
+      doc.rect(0, 0, 210, 44, "F");
+      doc.addImage(logo, "PNG", 15, 6, 32, 32, undefined, "FAST");
+      doc.setTextColor(200, 169, 106);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("POLOKO TOMBSTONES", 52, 20);
+      doc.setFont("times", "italic");
+      doc.setFontSize(10);
+      doc.text("A Legacy Carved in Stone", 52, 28);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text("Garankuwa: 073 163 3836  |  Ganyesa: 083 928 0868", 52, 35);
+
+      doc.setTextColor(20, 17, 13);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(17);
+      doc.text("PAYMENT RECEIPT", 195, 58, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Receipt No: ${payment.receipt_number}`, 195, 66, { align: "right" });
+      doc.text(`Payment date: ${payment.paid_at}`, 195, 72, { align: "right" });
+
+      doc.setFillColor(244, 239, 230);
+      doc.roundedRect(15, 55, 82, 30, 2, 2, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(155, 116, 52);
+      doc.text("RECEIVED FROM", 20, 63);
+      doc.setTextColor(20, 17, 13);
+      doc.setFontSize(11);
+      doc.text(customer?.full_name || "Customer", 20, 71);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`Quotation: ${quote?.quote_number || "Not supplied"}`, 20, 78);
+
+      const tableY = 100;
+      doc.setFillColor(20, 17, 13);
+      doc.rect(15, tableY, 180, 10, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      ["PAYMENT TYPE", "METHOD", "REFERENCE", "AMOUNT RECEIVED"].forEach((heading, index) => doc.text(heading, [18, 63, 102, 151][index], tableY + 6.5));
+      doc.setFillColor(250, 247, 239);
+      doc.rect(15, tableY + 10, 180, 15, "F");
+      doc.setDrawColor(218, 194, 155);
+      doc.rect(15, tableY + 10, 180, 15);
+      doc.setTextColor(20, 17, 13);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(payment.payment_type, 18, tableY + 19);
+      doc.text(payment.payment_method, 63, tableY + 19);
+      doc.text(payment.reference || "Not supplied", 102, tableY + 19);
+      doc.setFont("helvetica", "bold");
+      doc.text(formatMoney(payment.amount), 192, tableY + 19, { align: "right" });
+
+      const summaryY = 145;
+      doc.setDrawColor(218, 194, 155);
+      doc.roundedRect(117, summaryY, 78, 42, 2, 2);
+      [["Quotation total", quote?.total_amount || 0], ["Total paid to date", totalPaid], ["Remaining balance", balance]].forEach(([label, value], index) => {
+        const lineY = summaryY + 9 + index * 10;
+        doc.setFont("helvetica", index === 2 ? "bold" : "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(index === 2 ? 155 : 20, index === 2 ? 116 : 17, index === 2 ? 52 : 13);
+        doc.text(String(label), 122, lineY);
+        doc.text(formatMoney(Number(value)), 190, lineY, { align: "right" });
+      });
+
+      doc.setTextColor(155, 116, 52);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("CONFIRMATION", 15, 205);
+      doc.setTextColor(20, 17, 13);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text(doc.splitTextToSize("Thank you. This document confirms receipt of the payment shown above. Please retain it for your records.", 175), 15, 213);
+      if (payment.notes) {
+        doc.setTextColor(155, 116, 52);
+        doc.setFont("helvetica", "bold");
+        doc.text("NOTES", 15, 234);
+        doc.setTextColor(20, 17, 13);
+        doc.setFont("helvetica", "normal");
+        doc.text(doc.splitTextToSize(payment.notes, 175), 15, 242);
+      }
+      doc.setDrawColor(200, 169, 106);
+      doc.line(15, 275, 195, 275);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.text("Thank you for choosing Poloko Tombstones.", 105, 282, { align: "center" });
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(155, 116, 52);
+      doc.text("POLOKO TOMBSTONES  |  A LEGACY CARVED IN STONE", 105, 289, { align: "center" });
+      doc.save(`${payment.receipt_number}-payment-receipt.pdf`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Receipt could not be downloaded.");
+    }
+  }
+
   if (checking) return <main style={page}>Checking admin access...</main>;
 
   return (
@@ -220,12 +385,30 @@ export default function AdminPaymentsPage() {
               <span>{payment.paid_at}</span>
               <span>{payment.payment_method}</span>
               <strong>R{Number(payment.amount).toFixed(2)}</strong>
+              <button type="button" onClick={() => startEditingPayment(payment)} style={smallButton}>Edit Payment</button>
+              <button type="button" onClick={() => void downloadReceipt(payment)} style={smallButton}>Download Receipt</button>
               <button type="button" onClick={() => void resendReceipt(payment.id)} style={smallButton}>Resend Receipt</button>
             </div>
           </article>
         ))}
         <PaginationControls itemLabel="payment history records" page={historyPage} pageSize={historyPageSize} totalItems={payments.length} onPageChange={setHistoryPage} onPageSizeChange={(pageSize) => { setHistoryPageSize(pageSize); setHistoryPage(1); }} />
       </section>
+
+      {editingPayment ? <form onSubmit={updatePayment} style={panel}>
+        <div style={workspaceHeader}>
+          <div><h2 style={workspaceTitle}>Edit Payment</h2><p style={muted}>Receipt {editingPayment.receipt_number}</p></div>
+          <button type="button" onClick={() => setEditingPayment(null)} style={smallButton}>Cancel</button>
+        </div>
+        <div style={formGrid}>
+          <label style={label}>Amount (R)<input required min="0.01" step="0.01" type="number" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} style={input} /></label>
+          <label style={label}>Payment type<select value={editForm.paymentType} onChange={(e) => setEditForm({ ...editForm, paymentType: e.target.value })} style={input}>{["Deposit", "Progress", "Balance", "Refund"].map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label style={label}>Method<select value={editForm.paymentMethod} onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })} style={input}>{["EFT", "Cash", "Card", "Other"].map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label style={label}>Reference<input value={editForm.reference} onChange={(e) => setEditForm({ ...editForm, reference: e.target.value })} style={input} /></label>
+          <label style={label}>Payment date<input required type="date" value={editForm.paidAt} onChange={(e) => setEditForm({ ...editForm, paidAt: e.target.value })} style={input} /></label>
+        </div>
+        <label style={label}>Notes<textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} style={input} /></label>
+        <button disabled={updating} style={primaryButton}>{updating ? "Saving..." : "Save Payment Changes"}</button>
+      </form> : null}
     </main>
   );
 }

@@ -37,6 +37,15 @@ type Customer = {
   email: string | null;
 };
 
+type Product = {
+  id: string;
+  title: string;
+  category: string;
+  description: string | null;
+  price: string | null;
+  product_code: string;
+};
+
 function first<T>(value: Related<T> | undefined) {
   return Array.isArray(value) ? value[0] : value || null;
 }
@@ -65,6 +74,8 @@ function AdminQuotesPageContent() {
   const [checking, setChecking] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState("");
   const [captureMode, setCaptureMode] = useState<"lead" | "manual">("lead");
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -73,7 +84,7 @@ function AdminQuotesPageContent() {
   const [quotePage, setQuotePage] = useState(1);
   const [quotePageSize, setQuotePageSize] = useState(5);
 
-  const [item, setItem] = useState<QuoteItem>({
+  const emptyItem = (): QuoteItem => ({
     item_name: "",
     description: "",
     quantity: 1,
@@ -83,6 +94,7 @@ function AdminQuotesPageContent() {
     square_meters: "",
     kilograms: "",
   });
+  const [items, setItems] = useState<QuoteItem[]>([emptyItem()]);
 
   const [documentType, setDocumentType] = useState<"Memorial" | "Raw Materials">("Memorial");
   const [depositPercentage, setDepositPercentage] = useState(50);
@@ -120,7 +132,7 @@ function AdminQuotesPageContent() {
 
       if (matchingLead) {
         setSelectedLeadId(matchingLead.id);
-        setItem({
+        setItems([{
           item_name: matchingLead.interest_type || "",
           description: matchingLead.message || "",
           quantity: 1,
@@ -129,7 +141,7 @@ function AdminQuotesPageContent() {
           dimensions: "",
           square_meters: "",
           kilograms: "",
-        });
+        }]);
       }
     }
   }, [leadFromUrl]);
@@ -148,6 +160,19 @@ function AdminQuotesPageContent() {
     setQuotes(data || []);
   }, []);
 
+  const fetchProducts = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("tombstone_products")
+      .select("id,title,category,description,price,product_code")
+      .eq("is_active", true)
+      .order("title");
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setProducts((data as Product[]) || []);
+  }, []);
+
   useEffect(() => {
     async function checkSession() {
       const {
@@ -160,11 +185,28 @@ function AdminQuotesPageContent() {
       }
 
       setChecking(false);
-      await Promise.all([fetchLeads(), fetchQuotes()]);
+      await Promise.all([fetchLeads(), fetchQuotes(), fetchProducts()]);
     }
 
     void checkSession();
-  }, [fetchLeads, fetchQuotes, router]);
+  }, [fetchLeads, fetchProducts, fetchQuotes, router]);
+
+  function productPrice(value: string | null) {
+    const parsed = Number((value || "").replace(/[^0-9.]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function selectFinishedProduct(productId: string) {
+    setSelectedProductId(productId);
+    const product = products.find((item) => item.id === productId);
+    if (!product) return;
+    setItems((current) => current.map((item, index) => index === 0 ? {
+      ...item,
+      item_name: product.title,
+      description: [product.category, product.product_code, product.description].filter(Boolean).join(" — "),
+      unit_price: productPrice(product.price),
+    } : item));
+  }
 
   function generateQuoteNumber() {
     const year = new Date().getFullYear();
@@ -175,8 +217,8 @@ function AdminQuotesPageContent() {
   async function createQuote(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!item.item_name || item.unit_price <= 0 || item.quantity <= 0) {
-      alert("Please complete the quote item, quantity and price.");
+    if (items.some((item) => !item.item_name.trim() || item.unit_price <= 0 || item.quantity <= 0)) {
+      alert("Please complete every quotation item, quantity and price.");
       return;
     }
 
@@ -185,18 +227,20 @@ function AdminQuotesPageContent() {
       alert("Please select a customer enquiry.");
       return;
     }
-    if (captureMode === "manual" && (!manualCustomer.fullName.trim() || !manualCustomer.phone.trim())) {
-      alert("Please enter the customer's full name and phone number.");
+    if (captureMode === "manual" && !manualCustomer.fullName.trim()) {
+      alert("Please enter the customer's full name.");
       return;
     }
 
-    const totalAmount = item.quantity * item.unit_price;
+    const totalAmount = items.reduce((total, item) => total + item.quantity * item.unit_price, 0);
     const depositAmount = totalAmount * (depositPercentage / 100);
     const balanceAmount = totalAmount - depositAmount;
     setSaving(true);
     if (captureMode === "manual") {
       const { data: customer, error: customerError } = await supabase
         .from("poloko_customers")
+        // Keep an empty value while the live schema still requires this column.
+        // The form deliberately does not require a phone number or email address.
         .insert({ full_name: manualCustomer.fullName.trim(), phone: manualCustomer.phone.trim(), email: manualCustomer.email.trim() || null, location: null })
         .select("id, full_name, phone, email")
         .single();
@@ -207,7 +251,7 @@ function AdminQuotesPageContent() {
       }
       const { data: manualLead, error: leadError } = await supabase
         .from("poloko_leads")
-        .insert({ customer_id: customer.id, interest_type: item.item_name, message: item.description || null, source: "Manual", status: "Quote Sent" })
+        .insert({ customer_id: customer.id, interest_type: items[0].item_name, message: items.map((item) => item.description).filter(Boolean).join(" | ") || null, source: "Manual", status: "Quote Sent" })
         .select("id, customer_id")
         .single();
       if (leadError || !manualLead) {
@@ -215,7 +259,7 @@ function AdminQuotesPageContent() {
         alert(leadError?.message || "Customer enquiry could not be saved.");
         return;
       }
-      lead = { id: manualLead.id, customer_id: manualLead.customer_id, interest_type: item.item_name, message: item.description || null, customer: [{ full_name: customer.full_name, phone: customer.phone, email: customer.email }] };
+      lead = { id: manualLead.id, customer_id: manualLead.customer_id, interest_type: items[0].item_name, message: items.map((item) => item.description).filter(Boolean).join(" | ") || null, customer: [{ full_name: customer.full_name, phone: customer.phone, email: customer.email }] };
     }
     if (!lead) {
       setSaving(false);
@@ -250,18 +294,18 @@ function AdminQuotesPageContent() {
 
     const { error: itemError } = await supabase
       .from("poloko_quote_items")
-      .insert({
+      .insert(items.map((item) => ({
         quote_id: quote.id,
-        item_name: item.item_name,
-        description: item.description,
+        item_name: item.item_name.trim(),
+        description: item.description.trim() || null,
         quantity: item.quantity,
         unit_price: item.unit_price,
-        total_price: totalAmount,
-        material: documentType === "Raw Materials" ? item.material || null : null,
-        dimensions: documentType === "Raw Materials" ? item.dimensions || null : null,
+        total_price: item.quantity * item.unit_price,
+        material: documentType === "Raw Materials" ? item.item_name.trim() : null,
+        dimensions: documentType === "Raw Materials" ? item.dimensions.trim() || null : null,
         square_meters: documentType === "Raw Materials" && item.square_meters !== "" ? Number(item.square_meters) : null,
         kilograms: documentType === "Raw Materials" && item.kilograms !== "" ? Number(item.kilograms) : null,
-      });
+      })));
 
     if (itemError) {
       setSaving(false);
@@ -280,7 +324,7 @@ function AdminQuotesPageContent() {
     setSelectedLeadId("");
     setCaptureMode("lead");
     setManualCustomer({ fullName: "", phone: "", email: "" });
-    setItem({ item_name: "", description: "", quantity: 1, unit_price: 0, material: "", dimensions: "", square_meters: "", kilograms: "" });
+    setItems([emptyItem()]);
     setDocumentType("Memorial");
     setDepositPercentage(50);
     setNotes("Quote valid for 30 days.");
@@ -302,7 +346,7 @@ function AdminQuotesPageContent() {
     const logo = await loadImageAsBase64(logoUrl);
     const [customerResult, itemsResult] = await Promise.all([
       supabase.from("poloko_customers").select("full_name,phone,email").eq("id", quote.customer_id).single(),
-      supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price,material,dimensions,square_meters,kilograms").eq("quote_id", quote.id),
+      supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price,material,dimensions,square_meters,kilograms").eq("quote_id", quote.id).order("created_at", { ascending: true }),
     ]);
     const customer = (customerResult.data as Customer | null) || { full_name: "Customer", phone: null, email: null };
     const items = (itemsResult.data as StoredQuoteItem[] | null) || [];
@@ -355,12 +399,14 @@ function AdminQuotesPageContent() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(isRawMaterials ? 5.8 : 7.5);
     const columns = isRawMaterials ? [15, 32, 58, 91, 112, 128, 145, 170] : [15, 32, 105, 128, 153];
-    const headings = isRawMaterials ? ["ITEM", "MATERIAL", "DIMENSIONS", "QTY", "M2", "KG", "UNIT PRICE", "AMOUNT"] : ["ITEM", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT"];
+    const headings = isRawMaterials ? ["MATERIAL", "DESCRIPTION", "L X W X H", "QTY", "M²", "KG", "UNIT PRICE", "AMOUNT"] : ["ITEM", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT"];
     headings.forEach((heading, index) => doc.text(heading, columns[index] + 3, tableY + 6.5));
     let y = tableY + 10;
     const printableItems: StoredQuoteItem[] = items.length ? items : [{ item_name: isRawMaterials ? "Raw material supply" : "Memorial package", description: quote.notes || "Custom tombstone quotation", quantity: 1, unit_price: Number(quote.total_amount), total_price: Number(quote.total_amount), material: null, dimensions: null, square_meters: null, kilograms: null }];
     printableItems.forEach((item, index) => {
-      const rowHeight = isRawMaterials ? 14 : Math.max(13, doc.splitTextToSize(item.description || "-", 66).length * 4 + 6);
+      const itemNameLines = isRawMaterials ? [] : doc.splitTextToSize(item.item_name, 14);
+      const descriptionLines = isRawMaterials ? [] : doc.splitTextToSize(item.description || "-", 66);
+      const rowHeight = isRawMaterials ? 14 : Math.max(13, Math.max(itemNameLines.length, descriptionLines.length) * 4 + 6);
       doc.setFillColor(index % 2 ? 255 : 250, index % 2 ? 252 : 247, index % 2 ? 248 : 239);
       doc.rect(15, y, 180, rowHeight, "F");
       doc.setDrawColor(218, 194, 155);
@@ -369,8 +415,8 @@ function AdminQuotesPageContent() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(isRawMaterials ? 6.5 : 8);
       if (isRawMaterials) {
-        doc.text(doc.splitTextToSize(item.item_name, 22), 18, y + 5);
-        doc.text(doc.splitTextToSize(item.material || "-", 23), 35, y + 5);
+        doc.text(doc.splitTextToSize(item.material || item.item_name, 22), 18, y + 5);
+        doc.text(doc.splitTextToSize(item.description || "-", 23), 35, y + 5);
         doc.text(doc.splitTextToSize(item.dimensions || "-", 27), 61, y + 5);
         doc.text(String(item.quantity), 94, y + 6);
         doc.text(item.square_meters === null ? "-" : Number(item.square_meters).toFixed(3), 115, y + 6);
@@ -378,8 +424,8 @@ function AdminQuotesPageContent() {
         doc.text(formatMoney(Number(item.unit_price)), 148, y + 6);
         doc.text(formatMoney(Number(item.total_price)), 192, y + 6, { align: "right" });
       } else {
-        doc.text(item.item_name, 18, y + 6);
-        doc.text(doc.splitTextToSize(item.description || "-", 66), 35, y + 6);
+        doc.text(itemNameLines, 18, y + 6);
+        doc.text(descriptionLines, 35, y + 6);
         doc.text(String(item.quantity), 108, y + 6);
         doc.text(formatMoney(Number(item.unit_price)), 131, y + 6);
         doc.text(formatMoney(Number(item.total_price)), 192, y + 6, { align: "right" });
@@ -596,12 +642,24 @@ function AdminQuotesPageContent() {
         {isQuoteWorkspaceOpen ? <>
 
         <label style={formLabel}>
-          Document type
+          What are you quoting for?
           <select value={documentType} onChange={(e) => setDocumentType(e.target.value as "Memorial" | "Raw Materials")} style={input}>
-            <option value="Memorial">Memorial / Tombstone</option>
-            <option value="Raw Materials">Raw Materials</option>
+            <option value="Memorial">Finished Product — use the tombstone catalogue</option>
+            <option value="Raw Materials">Raw Materials — enter material and measurements</option>
           </select>
         </label>
+
+        {documentType === "Memorial" ? <label style={formLabel}>
+          Option 1 — Select an active finished product from the catalogue
+          <select value={selectedProductId} onChange={(e) => selectFinishedProduct(e.target.value)} style={input}>
+            <option value="">Choose from the active product catalogue (optional)</option>
+            {products.map((product) => <option key={product.id} value={product.id}>{product.title} — {product.category} {product.price ? `(${product.price})` : "(price on request)"}</option>)}
+          </select>
+          <span style={fieldHelp}>Selecting a product fills the first quotation item automatically.</span>
+        </label> : <div style={leadPreview}>
+          <strong>Raw materials quotation</strong>
+          <p style={workspaceHint}>Enter the material, description, L × W × H, quantity, square metres, kilograms, and price for each line.</p>
+        </div>}
 
         <div style={captureToggle}>
           <button type="button" onClick={() => setCaptureMode("lead")} style={captureMode === "lead" ? activeCaptureButton : captureButton}>
@@ -621,7 +679,7 @@ function AdminQuotesPageContent() {
             const selected = leads.find((lead) => lead.id === newLeadId);
 
             if (selected) {
-              setItem({
+              setItems([{
                 item_name: selected.interest_type || "",
                 description: selected.message || "",
                 quantity: 1,
@@ -630,7 +688,7 @@ function AdminQuotesPageContent() {
                 dimensions: "",
                 square_meters: "",
                 kilograms: "",
-              });
+              }]);
             }
           }}
           required
@@ -648,7 +706,7 @@ function AdminQuotesPageContent() {
           })}
         </select> : <div style={formGrid}>
           <input placeholder="Customer full name" value={manualCustomer.fullName} onChange={(e) => setManualCustomer({ ...manualCustomer, fullName: e.target.value })} required style={input} />
-          <input placeholder="Phone / WhatsApp" value={manualCustomer.phone} onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })} required style={input} />
+          <input placeholder="Phone / WhatsApp (optional)" value={manualCustomer.phone} onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })} style={input} />
           <input type="email" placeholder="Email address (optional)" value={manualCustomer.email} onChange={(e) => setManualCustomer({ ...manualCustomer, email: e.target.value })} style={input} />
         </div>}
 
@@ -669,47 +727,42 @@ function AdminQuotesPageContent() {
           </div>
         ) : null}
 
-        <input
-          placeholder="Item name, e.g. Double Headstone"
-          value={item.item_name}
-          onChange={(e) => setItem({ ...item, item_name: e.target.value })}
-          required
-          style={input}
-        />
-
-        <textarea
-          placeholder="Description"
-          value={item.description}
-          onChange={(e) => setItem({ ...item, description: e.target.value })}
-          style={textarea}
-        />
-
-        {documentType === "Raw Materials" ? (
-          <div style={formGrid}>
-            <input placeholder="Material, e.g. Rustenburg Black Granite" value={item.material} onChange={(e) => setItem({ ...item, material: e.target.value })} style={input} />
-            <input placeholder="L x W x H, e.g. 80 x 60 x 5 cm" value={item.dimensions} onChange={(e) => setItem({ ...item, dimensions: e.target.value })} style={input} />
-            <input type="number" min="0" step="0.001" placeholder="Square metres (m²)" value={item.square_meters} onChange={(e) => setItem({ ...item, square_meters: e.target.value === "" ? "" : Number(e.target.value) })} style={input} />
-            <input type="number" min="0" step="0.001" placeholder="Weight (kg)" value={item.kilograms} onChange={(e) => setItem({ ...item, kilograms: e.target.value === "" ? "" : Number(e.target.value) })} style={input} />
-          </div>
-        ) : null}
-
-        <input
-          type="number"
-          placeholder="Quantity"
-          value={item.quantity}
-          onChange={(e) => setItem({ ...item, quantity: Number(e.target.value) })}
-          required
-          style={input}
-        />
-
-        <input
-          type="number"
-          placeholder="Unit price"
-          value={item.unit_price}
-          onChange={(e) => setItem({ ...item, unit_price: Number(e.target.value) })}
-          required
-          style={input}
-        />
+        <p style={workspaceHint}>{documentType === "Memorial" ? "Option 2 — or add a custom item below. You can also add extras such as a photo, transport, or an allowance." : "Add each raw material line with its measurements and price."}</p>
+        {items.map((item, index) => {
+          const updateItem = (changes: Partial<QuoteItem>) => setItems((current) => current.map((currentItem, currentIndex) => currentIndex === index ? { ...currentItem, ...changes } : currentItem));
+          return <div key={index} style={leadPreview}>
+            <div style={workspaceHeader}>
+              <strong>Quotation item {index + 1}</strong>
+              {items.length > 1 ? <button type="button" onClick={() => setItems((current) => current.filter((_, currentIndex) => currentIndex !== index))} style={quoteDeleteButton}>Remove item</button> : null}
+            </div>
+            <div style={formGrid}>
+              <label style={formLabel}>{documentType === "Raw Materials" ? "Material" : "Item name"}
+                <input placeholder={documentType === "Raw Materials" ? "e.g. Rustenburg Black Granite" : "e.g. Tombstone, Photo, or Transport"} value={item.item_name} onChange={(e) => updateItem({ item_name: e.target.value })} required style={input} />
+              </label>
+              <label style={formLabel}>Quantity
+                <input type="number" min="1" placeholder="e.g. 1" value={item.quantity} onChange={(e) => updateItem({ quantity: Number(e.target.value) })} required style={input} />
+              </label>
+              <label style={formLabel}>Unit price (R)
+                <input type="number" min="0" step="0.01" placeholder="e.g. 66000.00" value={item.unit_price} onChange={(e) => updateItem({ unit_price: Number(e.target.value) })} required style={input} />
+              </label>
+            </div>
+            <label style={formLabel}>Description
+              <textarea placeholder={documentType === "Raw Materials" ? "e.g. Polished black granite" : "e.g. Photo size 18 × 24 or Single trip (discounted)"} value={item.description} onChange={(e) => updateItem({ description: e.target.value })} style={textarea} />
+            </label>
+            {documentType === "Raw Materials" ? <div style={formGrid}>
+              <label style={formLabel}>L × W × H
+                <input placeholder="e.g. 80 × 60 × 5 cm" value={item.dimensions} onChange={(e) => updateItem({ dimensions: e.target.value })} style={input} />
+              </label>
+              <label style={formLabel}>Square metres (m²)
+                <input type="number" min="0" step="0.001" placeholder="e.g. 0.480" value={item.square_meters} onChange={(e) => updateItem({ square_meters: e.target.value === "" ? "" : Number(e.target.value) })} style={input} />
+              </label>
+              <label style={formLabel}>Weight (kg)
+                <input type="number" min="0" step="0.001" placeholder="e.g. 35" value={item.kilograms} onChange={(e) => updateItem({ kilograms: e.target.value === "" ? "" : Number(e.target.value) })} style={input} />
+              </label>
+            </div> : null}
+          </div>;
+        })}
+        <button type="button" onClick={() => setItems((current) => [...current, emptyItem()])} style={secondaryButton}>Add quotation item or allowance</button>
 
         <input
           type="number"
@@ -728,17 +781,17 @@ function AdminQuotesPageContent() {
 
         <div style={summaryBox}>
           <p>
-            <strong>Total:</strong> R{Number(item.quantity * item.unit_price || 0).toFixed(2)}
+            <strong>Total:</strong> R{Number(items.reduce((total, item) => total + item.quantity * item.unit_price, 0)).toFixed(2)}
           </p>
           <p>
             <strong>Deposit:</strong> R
-            {Number((item.quantity * item.unit_price || 0) * (depositPercentage / 100)).toFixed(2)}
+            {Number(items.reduce((total, item) => total + item.quantity * item.unit_price, 0) * (depositPercentage / 100)).toFixed(2)}
           </p>
           <p>
             <strong>Balance:</strong> R
             {Number(
-              (item.quantity * item.unit_price || 0) -
-                (item.quantity * item.unit_price || 0) * (depositPercentage / 100)
+              items.reduce((total, item) => total + item.quantity * item.unit_price, 0) -
+                items.reduce((total, item) => total + item.quantity * item.unit_price, 0) * (depositPercentage / 100)
             ).toFixed(2)}
           </p>
         </div>
@@ -915,6 +968,12 @@ const formLabel: React.CSSProperties = {
   gap: "7px",
   color: "#5C5145",
   fontWeight: 700,
+};
+
+const fieldHelp: React.CSSProperties = {
+  color: "#6C5A45",
+  fontWeight: 400,
+  fontSize: "12px",
 };
 
 const input: React.CSSProperties = {
