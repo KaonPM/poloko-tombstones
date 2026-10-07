@@ -17,7 +17,10 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      // Email addresses are case-insensitive. Normalising pasted input also
+      // prevents an invisible leading or trailing space from causing a failed
+      // login on another person's device.
+      email: email.trim().toLowerCase(),
       password,
     });
 
