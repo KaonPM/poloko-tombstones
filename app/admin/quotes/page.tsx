@@ -417,7 +417,7 @@ function AdminQuotesPageContent() {
     const logo = await loadImageAsBase64(logoUrl);
     const [customerResult, itemsResult] = await Promise.all([
       supabase.from("poloko_customers").select("full_name,phone,email").eq("id", quote.customer_id).single(),
-      supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price,material,dimensions,square_meters,kilograms").eq("quote_id", quote.id).order("created_at", { ascending: true }),
+      supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price,material,dimensions,square_meters,kilograms").eq("quote_id", quote.id),
     ]);
 
     if (itemsResult.error) {
@@ -654,8 +654,7 @@ function AdminQuotesPageContent() {
     const { data, error } = await supabase
       .from("poloko_quote_items")
       .select("item_name,description,quantity,unit_price,material,dimensions,square_meters,kilograms")
-      .eq("quote_id", quote.id)
-      .order("created_at", { ascending: true });
+      .eq("quote_id", quote.id);
 
     if (error) {
       alert(error.message);
