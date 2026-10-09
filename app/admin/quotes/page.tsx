@@ -308,8 +308,12 @@ function AdminQuotesPageContent() {
       })));
 
     if (itemError) {
+      // Do not leave a quote behind that can generate a misleading PDF with no
+      // line items. In particular, this catches deployments where the raw
+      // materials migration has not yet been applied.
+      await supabase.from("poloko_quotes").delete().eq("id", quote.id);
       setSaving(false);
-      alert(itemError.message);
+      alert(`Quotation items could not be saved. ${itemError.message}`);
       return;
     }
 
@@ -348,8 +352,18 @@ function AdminQuotesPageContent() {
       supabase.from("poloko_customers").select("full_name,phone,email").eq("id", quote.customer_id).single(),
       supabase.from("poloko_quote_items").select("item_name,description,quantity,unit_price,total_price,material,dimensions,square_meters,kilograms").eq("quote_id", quote.id).order("created_at", { ascending: true }),
     ]);
+
+    if (itemsResult.error) {
+      alert(`The quotation items could not be loaded. ${itemsResult.error.message}`);
+      return;
+    }
+
     const customer = (customerResult.data as Customer | null) || { full_name: "Customer", phone: null, email: null };
     const items = (itemsResult.data as StoredQuoteItem[] | null) || [];
+    if (!items.length) {
+      alert("This quotation has no saved line items, so a document cannot be generated. Delete it and create it again after applying the raw-materials database migration.");
+      return;
+    }
     const title = documentKind === "quotation" ? "FORMAL QUOTATION" : "PROFORMA INVOICE";
     const isRawMaterials = quote.document_type === "Raw Materials";
     const reference = documentKind === "quotation" ? quote.quote_number : `PI-${quote.quote_number.replace(/^PT-/, "")}`;
@@ -398,15 +412,33 @@ function AdminQuotesPageContent() {
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(isRawMaterials ? 5.8 : 7.5);
-    const columns = isRawMaterials ? [15, 32, 58, 91, 112, 128, 145, 170] : [15, 32, 105, 128, 153];
-    const headings = isRawMaterials ? ["MATERIAL", "DESCRIPTION", "L X W X H", "QTY", "M²", "KG", "UNIT PRICE", "AMOUNT"] : ["ITEM", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT"];
-    headings.forEach((heading, index) => doc.text(heading, columns[index] + 3, tableY + 6.5));
+    const rawColumnWidths = [27, 34, 25, 11, 12, 12, 23, 36];
+    const rawColumnStarts = rawColumnWidths.reduce<number[]>((starts, _width, index) => {
+      starts.push(index === 0 ? 15 : starts[index - 1] + rawColumnWidths[index - 1]);
+      return starts;
+    }, []);
+    const columns = isRawMaterials ? rawColumnStarts : [15, 32, 105, 128, 153];
+    const headings = isRawMaterials ? ["MATERIAL", "DESCRIPTION", "L X W X H", "QTY", "M2", "KG", "UNIT PRICE", "AMOUNT"] : ["ITEM", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT"];
+    headings.forEach((heading, index) => {
+      const width = isRawMaterials ? rawColumnWidths[index] : undefined;
+      const alignment = isRawMaterials && index >= 3 ? "right" : "left";
+      const x = alignment === "right" && width ? columns[index] + width - 3 : columns[index] + 3;
+      doc.text(heading, x, tableY + 6.5, { align: alignment });
+    });
     let y = tableY + 10;
-    const printableItems: StoredQuoteItem[] = items.length ? items : [{ item_name: isRawMaterials ? "Raw material supply" : "Memorial package", description: quote.notes || "Custom tombstone quotation", quantity: 1, unit_price: Number(quote.total_amount), total_price: Number(quote.total_amount), material: null, dimensions: null, square_meters: null, kilograms: null }];
-    printableItems.forEach((item, index) => {
+    items.forEach((item, index) => {
       const itemNameLines = isRawMaterials ? [] : doc.splitTextToSize(item.item_name, 14);
       const descriptionLines = isRawMaterials ? [] : doc.splitTextToSize(item.description || "-", 66);
-      const rowHeight = isRawMaterials ? 14 : Math.max(13, Math.max(itemNameLines.length, descriptionLines.length) * 4 + 6);
+      const rawCellLines = isRawMaterials
+        ? [
+            doc.splitTextToSize(item.material || item.item_name, rawColumnWidths[0] - 6),
+            doc.splitTextToSize(item.description || "-", rawColumnWidths[1] - 6),
+            doc.splitTextToSize(item.dimensions || "-", rawColumnWidths[2] - 6),
+          ]
+        : [];
+      const rowHeight = isRawMaterials
+        ? Math.max(13, Math.max(...rawCellLines.map((lines) => lines.length)) * 3.5 + 6)
+        : Math.max(13, Math.max(itemNameLines.length, descriptionLines.length) * 4 + 6);
       doc.setFillColor(index % 2 ? 255 : 250, index % 2 ? 252 : 247, index % 2 ? 248 : 239);
       doc.rect(15, y, 180, rowHeight, "F");
       doc.setDrawColor(218, 194, 155);
@@ -415,14 +447,18 @@ function AdminQuotesPageContent() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(isRawMaterials ? 6.5 : 8);
       if (isRawMaterials) {
-        doc.text(doc.splitTextToSize(item.material || item.item_name, 22), 18, y + 5);
-        doc.text(doc.splitTextToSize(item.description || "-", 23), 35, y + 5);
-        doc.text(doc.splitTextToSize(item.dimensions || "-", 27), 61, y + 5);
-        doc.text(String(item.quantity), 94, y + 6);
-        doc.text(item.square_meters === null ? "-" : Number(item.square_meters).toFixed(3), 115, y + 6);
-        doc.text(item.kilograms === null ? "-" : Number(item.kilograms).toFixed(1), 131, y + 6);
-        doc.text(formatMoney(Number(item.unit_price)), 148, y + 6);
-        doc.text(formatMoney(Number(item.total_price)), 192, y + 6, { align: "right" });
+        rawCellLines.forEach((lines, cellIndex) => doc.text(lines, rawColumnStarts[cellIndex] + 3, y + 5));
+        const rawValues = [
+          String(item.quantity),
+          item.square_meters === null ? "-" : Number(item.square_meters).toFixed(3),
+          item.kilograms === null ? "-" : Number(item.kilograms).toFixed(1),
+          formatMoney(Number(item.unit_price)),
+          formatMoney(Number(item.total_price)),
+        ];
+        rawValues.forEach((value, valueIndex) => {
+          const columnIndex = valueIndex + 3;
+          doc.text(value, rawColumnStarts[columnIndex] + rawColumnWidths[columnIndex] - 3, y + 6, { align: "right" });
+        });
       } else {
         doc.text(itemNameLines, 18, y + 6);
         doc.text(descriptionLines, 35, y + 6);
@@ -491,11 +527,13 @@ function AdminQuotesPageContent() {
 
   async function downloadQuotePdf(quote: Quote) {
     const doc = await buildQuotePdf(quote, "quotation");
+    if (!doc) return;
     doc.save(`${quote.quote_number}-quotation.pdf`);
   }
 
   async function downloadProformaPdf(quote: Quote) {
     const doc = await buildQuotePdf(quote, "proforma");
+    if (!doc) return;
     doc.save(`${quote.quote_number}-proforma-invoice.pdf`);
   }
 
@@ -504,6 +542,7 @@ function AdminQuotesPageContent() {
     setEmailingDocumentKey(documentKey);
     try {
       const doc = await buildQuotePdf(quote, documentKind);
+      if (!doc) return;
       const pdfBase64 = doc.output("datauristring").split(",")[1];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Your admin session has expired.");
