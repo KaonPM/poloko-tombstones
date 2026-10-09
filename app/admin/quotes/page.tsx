@@ -79,6 +79,7 @@ function AdminQuotesPageContent() {
   const [captureMode, setCaptureMode] = useState<"lead" | "manual">("lead");
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [emailingDocumentKey, setEmailingDocumentKey] = useState<string | null>(null);
   const [isQuoteWorkspaceOpen, setIsQuoteWorkspaceOpen] = useState(false);
   const [quotePage, setQuotePage] = useState(1);
@@ -222,6 +223,75 @@ function AdminQuotesPageContent() {
       return;
     }
 
+    const totalAmount = items.reduce((total, item) => total + item.quantity * item.unit_price, 0);
+    const depositAmount = totalAmount * (depositPercentage / 100);
+    const balanceAmount = totalAmount - depositAmount;
+
+    if (editingQuote) {
+      setSaving(true);
+      const { error: deleteItemsError } = await supabase
+        .from("poloko_quote_items")
+        .delete()
+        .eq("quote_id", editingQuote.id);
+
+      if (deleteItemsError) {
+        setSaving(false);
+        alert(deleteItemsError.message);
+        return;
+      }
+
+      const { error: insertItemsError } = await supabase
+        .from("poloko_quote_items")
+        .insert(items.map((item) => ({
+          quote_id: editingQuote.id,
+          item_name: item.item_name.trim(),
+          description: item.description.trim() || null,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.quantity * item.unit_price,
+          material: documentType === "Raw Materials" ? item.item_name.trim() : null,
+          dimensions: documentType === "Raw Materials" ? item.dimensions.trim() || null : null,
+          square_meters: documentType === "Raw Materials" && item.square_meters !== "" ? Number(item.square_meters) : null,
+          kilograms: documentType === "Raw Materials" && item.kilograms !== "" ? Number(item.kilograms) : null,
+        })));
+
+      if (insertItemsError) {
+        setSaving(false);
+        alert(`Updated items could not be saved. ${insertItemsError.message}`);
+        return;
+      }
+
+      const { error: quoteError } = await supabase
+        .from("poloko_quotes")
+        .update({
+          total_amount: totalAmount,
+          deposit_amount: depositAmount,
+          balance_amount: balanceAmount,
+          document_type: documentType,
+          notes,
+        })
+        .eq("id", editingQuote.id);
+
+      setSaving(false);
+      if (quoteError) {
+        alert(quoteError.message);
+        return;
+      }
+
+      setQuotes((current) => current.map((quote) => quote.id === editingQuote.id ? {
+        ...quote,
+        total_amount: totalAmount,
+        deposit_amount: depositAmount,
+        balance_amount: balanceAmount,
+        document_type: documentType,
+        notes,
+      } : quote));
+      setEditingQuote(null);
+      setIsQuoteWorkspaceOpen(false);
+      alert("Quotation updated. Download it again to use the new details.");
+      return;
+    }
+
     let lead = leads.find((leadItem) => leadItem.id === selectedLeadId);
     if (captureMode === "lead" && !lead) {
       alert("Please select a customer enquiry.");
@@ -232,9 +302,6 @@ function AdminQuotesPageContent() {
       return;
     }
 
-    const totalAmount = items.reduce((total, item) => total + item.quantity * item.unit_price, 0);
-    const depositAmount = totalAmount * (depositPercentage / 100);
-    const balanceAmount = totalAmount - depositAmount;
     setSaving(true);
     if (captureMode === "manual") {
       const { data: customer, error: customerError } = await supabase
@@ -583,6 +650,50 @@ function AdminQuotesPageContent() {
     router.push("/admin/login");
   }
 
+  async function startEditingQuote(quote: Quote) {
+    const { data, error } = await supabase
+      .from("poloko_quote_items")
+      .select("item_name,description,quantity,unit_price,material,dimensions,square_meters,kilograms")
+      .eq("quote_id", quote.id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    const quoteItems = (data as StoredQuoteItem[] | null) || [];
+    if (!quoteItems.length) {
+      alert("This quotation has no saved line items and cannot be edited. Create a replacement quotation instead.");
+      return;
+    }
+
+    setEditingQuote(quote);
+    setDocumentType(quote.document_type);
+    setNotes(quote.notes || "");
+    setDepositPercentage(quote.total_amount ? Number(((quote.deposit_amount / quote.total_amount) * 100).toFixed(2)) : 50);
+    setSelectedProductId("");
+    setItems(quoteItems.map((item) => ({
+      item_name: item.item_name,
+      description: item.description || "",
+      quantity: Number(item.quantity),
+      unit_price: Number(item.unit_price),
+      material: item.material || "",
+      dimensions: item.dimensions || "",
+      square_meters: item.square_meters === null ? "" : Number(item.square_meters),
+      kilograms: item.kilograms === null ? "" : Number(item.kilograms),
+    })));
+    setIsQuoteWorkspaceOpen(true);
+  }
+
+  function cancelEditingQuote() {
+    setEditingQuote(null);
+    setItems([emptyItem()]);
+    setNotes("Quote valid for 30 days.");
+    setDepositPercentage(50);
+    setSelectedProductId("");
+  }
+
   async function updateQuoteStatus(id: string, status: string) {
     const { error } = await supabase
       .from("poloko_quotes")
@@ -667,7 +778,7 @@ function AdminQuotesPageContent() {
 
       <form onSubmit={createQuote} style={formBox}>
         <div style={workspaceHeader}>
-          <h2 style={sectionTitle}>Create Formal Quotation</h2>
+          <h2 style={sectionTitle}>{editingQuote ? `Edit ${editingQuote.quote_number}` : "Create Formal Quotation"}</h2>
           <button
             type="button"
             aria-expanded={isQuoteWorkspaceOpen}
@@ -700,7 +811,10 @@ function AdminQuotesPageContent() {
           <p style={workspaceHint}>Enter the material, description, L × W × H, quantity, square metres, kilograms, and price for each line.</p>
         </div>}
 
-        <div style={captureToggle}>
+        {editingQuote ? <div style={leadPreview}>
+          <strong>Editing an existing quotation</strong>
+          <p style={workspaceHint}>The original customer is retained. Update the quotation items, measurements, prices, deposit percentage, or notes below.</p>
+        </div> : <><div style={captureToggle}>
           <button type="button" onClick={() => setCaptureMode("lead")} style={captureMode === "lead" ? activeCaptureButton : captureButton}>
             Use Website Enquiry
           </button>
@@ -747,7 +861,7 @@ function AdminQuotesPageContent() {
           <input placeholder="Customer full name" value={manualCustomer.fullName} onChange={(e) => setManualCustomer({ ...manualCustomer, fullName: e.target.value })} required style={input} />
           <input placeholder="Phone / WhatsApp (optional)" value={manualCustomer.phone} onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })} style={input} />
           <input type="email" placeholder="Email address (optional)" value={manualCustomer.email} onChange={(e) => setManualCustomer({ ...manualCustomer, email: e.target.value })} style={input} />
-        </div>}
+        </div>}</>}
 
         {captureMode === "lead" && selectedLead ? (
           <div style={leadPreview}>
@@ -836,8 +950,9 @@ function AdminQuotesPageContent() {
         </div>
 
         <button type="submit" disabled={saving} style={button}>
-          {saving ? "Saving Quotation..." : "Create Formal Quotation"}
+          {saving ? "Saving Quotation..." : editingQuote ? "Save Quotation Changes" : "Create Formal Quotation"}
         </button>
+        {editingQuote ? <button type="button" onClick={cancelEditingQuote} style={secondaryButton}>Cancel Edit</button> : null}
         </> : <p style={workspaceHint}>Open this workspace when you are ready to capture a formal quotation.</p>}
       </form>
 
@@ -864,6 +979,9 @@ function AdminQuotesPageContent() {
             <p>Deposit: R{Number(quote.deposit_amount).toFixed(2)}</p>
             <p>Balance: R{Number(quote.balance_amount).toFixed(2)}</p>
 
+            <button onClick={() => void startEditingQuote(quote)} style={secondaryButton}>
+              Edit Quotation
+            </button>
             <button onClick={() => downloadQuotePdf(quote)} style={button}>
               Download Quotation
             </button>
