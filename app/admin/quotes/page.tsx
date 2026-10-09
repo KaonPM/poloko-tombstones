@@ -228,7 +228,27 @@ function AdminQuotesPageContent() {
     const balanceAmount = totalAmount - depositAmount;
 
     if (editingQuote) {
+      if (!manualCustomer.fullName.trim()) {
+        alert("Please enter the customer's full name.");
+        return;
+      }
+
       setSaving(true);
+      const { error: customerError } = await supabase
+        .from("poloko_customers")
+        .update({
+          full_name: manualCustomer.fullName.trim(),
+          phone: manualCustomer.phone.trim(),
+          email: manualCustomer.email.trim() || null,
+        })
+        .eq("id", editingQuote.customer_id);
+
+      if (customerError) {
+        setSaving(false);
+        alert(customerError.message);
+        return;
+      }
+
       const { error: deleteItemsError } = await supabase
         .from("poloko_quote_items")
         .delete()
@@ -651,23 +671,35 @@ function AdminQuotesPageContent() {
   }
 
   async function startEditingQuote(quote: Quote) {
-    const { data, error } = await supabase
-      .from("poloko_quote_items")
-      .select("item_name,description,quantity,unit_price,material,dimensions,square_meters,kilograms")
-      .eq("quote_id", quote.id);
+    const [itemsResult, customerResult] = await Promise.all([
+      supabase
+        .from("poloko_quote_items")
+        .select("item_name,description,quantity,unit_price,material,dimensions,square_meters,kilograms")
+        .eq("quote_id", quote.id),
+      supabase
+        .from("poloko_customers")
+        .select("full_name,phone,email")
+        .eq("id", quote.customer_id)
+        .single(),
+    ]);
 
-    if (error) {
-      alert(error.message);
+    if (itemsResult.error || customerResult.error || !customerResult.data) {
+      alert(itemsResult.error?.message || customerResult.error?.message || "Customer details could not be loaded.");
       return;
     }
 
-    const quoteItems = (data as StoredQuoteItem[] | null) || [];
+    const quoteItems = (itemsResult.data as StoredQuoteItem[] | null) || [];
     if (!quoteItems.length) {
       alert("This quotation has no saved line items and cannot be edited. Create a replacement quotation instead.");
       return;
     }
 
     setEditingQuote(quote);
+    setManualCustomer({
+      fullName: customerResult.data.full_name || "",
+      phone: customerResult.data.phone || "",
+      email: customerResult.data.email || "",
+    });
     setDocumentType(quote.document_type);
     setNotes(quote.notes || "");
     setDepositPercentage(quote.total_amount ? Number(((quote.deposit_amount / quote.total_amount) * 100).toFixed(2)) : 50);
@@ -691,6 +723,7 @@ function AdminQuotesPageContent() {
     setNotes("Quote valid for 30 days.");
     setDepositPercentage(50);
     setSelectedProductId("");
+    setManualCustomer({ fullName: "", phone: "", email: "" });
   }
 
   async function updateQuoteStatus(id: string, status: string) {
@@ -812,7 +845,12 @@ function AdminQuotesPageContent() {
 
         {editingQuote ? <div style={leadPreview}>
           <strong>Editing an existing quotation</strong>
-          <p style={workspaceHint}>The original customer is retained. Update the quotation items, measurements, prices, deposit percentage, or notes below.</p>
+          <p style={workspaceHint}>Update the customer and quotation details below. Customer changes apply to their other records too.</p>
+          <div style={formGrid}>
+            <input placeholder="Customer full name" value={manualCustomer.fullName} onChange={(e) => setManualCustomer({ ...manualCustomer, fullName: e.target.value })} required style={input} />
+            <input placeholder="Phone / WhatsApp number" value={manualCustomer.phone} onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })} style={input} />
+            <input type="email" placeholder="Email address" value={manualCustomer.email} onChange={(e) => setManualCustomer({ ...manualCustomer, email: e.target.value })} style={input} />
+          </div>
         </div> : <><div style={captureToggle}>
           <button type="button" onClick={() => setCaptureMode("lead")} style={captureMode === "lead" ? activeCaptureButton : captureButton}>
             Use Website Enquiry
