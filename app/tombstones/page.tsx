@@ -23,6 +23,7 @@ type Product = {
 type SortOption = "featured" | "newest";
 
 const PRICE_ON_REQUEST = "Price Available On Request";
+const DESCRIPTION_PREVIEW_LENGTH = 120;
 
 export default function TombstonesPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -216,7 +217,24 @@ export default function TombstonesPage() {
 
                 <h2 style={cardTitle}>{product.title}</h2>
                 <p style={price}>{PRICE_ON_REQUEST}</p>
-                <p style={description}>{product.description}</p>
+                {product.description ? (
+                  <>
+                    <p style={cardDescription} title={product.description}>
+                      {product.description.length > DESCRIPTION_PREVIEW_LENGTH
+                        ? `${product.description.slice(0, DESCRIPTION_PREVIEW_LENGTH).trimEnd()}…`
+                        : product.description}
+                    </p>
+                    {product.description.length > DESCRIPTION_PREVIEW_LENGTH ? (
+                      <span
+                        aria-label={`Show full description for ${product.title}`}
+                        style={moreLabel}
+                        title={product.description}
+                      >
+                        More
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
 
                 <Link
                   href={`/?productId=${encodeURIComponent(product.id)}`}
@@ -718,6 +736,10 @@ const card: React.CSSProperties = {
   border: "1px solid #D8C29B",
   boxShadow: "0 14px 35px rgba(38,29,20,0.07)",
   overflow: "hidden",
+  height: "490px",
+  display: "flex",
+  flexDirection: "column",
+  boxSizing: "border-box",
 };
 
 const imageButton: React.CSSProperties = {
@@ -749,6 +771,9 @@ const imagePlaceholder: React.CSSProperties = {
 
 const content: React.CSSProperties = {
   padding: "20px",
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
 };
 
 const category: React.CSSProperties = {
@@ -781,6 +806,25 @@ const description: React.CSSProperties = {
   marginBottom: "18px",
 };
 
+const cardDescription: React.CSSProperties = {
+  ...description,
+  minHeight: "3.3em",
+  maxHeight: "3.3em",
+  overflow: "hidden",
+  margin: 0,
+};
+
+const moreLabel: React.CSSProperties = {
+  color: "#9B7434",
+  fontStyle: "normal",
+  fontWeight: 700,
+  fontSize: "12px",
+  alignSelf: "flex-start",
+  margin: "0 0 14px",
+  textDecoration: "underline",
+  cursor: "help",
+};
+
 const button: React.CSSProperties = {
   display: "inline-block",
   background: "#14110D",
@@ -790,6 +834,7 @@ const button: React.CSSProperties = {
   letterSpacing: "3px",
   textTransform: "uppercase",
   fontSize: "12px",
+  marginTop: "auto",
 };
 
 const modalOverlay: React.CSSProperties = {
