@@ -830,10 +830,11 @@ const button: React.CSSProperties = {
   background: "#14110D",
   color: "#C8A96A",
   textDecoration: "none",
-  padding: "11px 16px",
-  letterSpacing: "3px",
+  padding: "10px 12px",
+  letterSpacing: "1px",
   textTransform: "uppercase",
-  fontSize: "12px",
+  fontSize: "9px",
+  whiteSpace: "nowrap",
   marginTop: "auto",
 };
 
