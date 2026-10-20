@@ -4,7 +4,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { getCatalogueTotal } from "@/lib/catalogue-price";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -21,7 +20,9 @@ type Product = {
   created_at: string | null;
 };
 
-type SortOption = "featured" | "price-high" | "price-low" | "newest";
+type SortOption = "featured" | "newest";
+
+const PRICE_ON_REQUEST = "Price Available On Request";
 
 export default function TombstonesPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -43,14 +44,7 @@ export default function TombstonesPage() {
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: false });
 
-    if (!error) {
-      setProducts(
-        (data || []).map((product) => ({
-          ...product,
-          price: getCatalogueTotal(product.price),
-        }))
-      );
-    }
+    if (!error) setProducts(data || []);
     setLoading(false);
   }, []);
 
@@ -62,14 +56,6 @@ export default function TombstonesPage() {
 
   const sortedProducts = useMemo(() => {
     return [...products].sort((a, b) => {
-      if (sortBy === "price-high") {
-        return getPriceValue(b.price) - getPriceValue(a.price);
-      }
-
-      if (sortBy === "price-low") {
-        return getPriceValue(a.price) - getPriceValue(b.price);
-      }
-
       if (sortBy === "newest") {
         return (
           new Date(b.created_at || "").getTime() -
@@ -178,8 +164,6 @@ export default function TombstonesPage() {
             style={select}
           >
             <option value="featured">Featured</option>
-            <option value="price-high">Price: High to Low</option>
-            <option value="price-low">Price: Low to High</option>
             <option value="newest">Newest First</option>
           </select>
 
@@ -231,10 +215,7 @@ export default function TombstonesPage() {
                 </p>
 
                 <h2 style={cardTitle}>{product.title}</h2>
-                <p style={price}>{product.price || "Quote Required"}</p>
-                <p style={installationNote}>
-                  Price includes free installation in local service areas. R10/km applies outside these areas.
-                </p>
+                <p style={price}>{PRICE_ON_REQUEST}</p>
                 <p style={description}>{product.description}</p>
 
                 <Link
@@ -300,10 +281,7 @@ export default function TombstonesPage() {
             <div style={modalContent}>
               <p style={category}>{selectedProduct.category}</p>
               <h2 style={modalTitle}>{selectedProduct.title}</h2>
-              <p style={price}>{selectedProduct.price || "Quote Required"}</p>
-              <p style={installationNote}>
-                Price includes free installation in local service areas. R10/km applies outside these areas.
-              </p>
+              <p style={price}>{PRICE_ON_REQUEST}</p>
               <p style={description}>{selectedProduct.description}</p>
 
               <Link
@@ -550,8 +528,7 @@ function PdfProductPage({
               <p style={pdfProductCode}>
                 Code: {product.product_code}
               </p>
-              <p style={pdfProductPrice}>{product.price || "Quote Required"}</p>
-              <p style={pdfInstallationNote}>Free local installation. R10/km outside local areas.</p>
+              <p style={pdfProductPrice}>{PRICE_ON_REQUEST}</p>
             </div>
           </div>
         ))}
@@ -653,15 +630,6 @@ function chunkProducts(products: Product[], size: number) {
   }
 
   return chunks;
-}
-
-function getPriceValue(price: string | null) {
-  if (!price) return 0;
-
-  const cleaned = price.replace(/[^\d.]/g, "");
-  const value = Number(cleaned);
-
-  return Number.isNaN(value) ? 0 : value;
 }
 
 const page: React.CSSProperties = {
@@ -800,7 +768,10 @@ const cardTitle: React.CSSProperties = {
 const price: React.CSSProperties = {
   color: "#C08A18",
   fontWeight: 700,
-  marginBottom: "10px",
+  fontSize: "12px",
+  lineHeight: 1.2,
+  whiteSpace: "nowrap",
+  margin: "0 0 10px",
 };
 
 const description: React.CSSProperties = {
@@ -1051,13 +1022,6 @@ const pdfServiceItemLight: React.CSSProperties = {
   textAlign: "center",
 };
 
-const installationNote: React.CSSProperties = {
-  color: "#7A5A28",
-  fontSize: "12px",
-  lineHeight: 1.5,
-  margin: "-4px 0 10px",
-};
-
 const pdfPaymentTitle: React.CSSProperties = {
   fontSize: "44px",
   margin: "0 0 8px",
@@ -1264,9 +1228,10 @@ const pdfProductCode: React.CSSProperties = {
 };
 
 const pdfProductPrice: React.CSSProperties = {
-  fontSize: "15px",
+  fontSize: "11px",
   color: "#C08A18",
   fontWeight: 700,
+  whiteSpace: "nowrap",
   margin: 0,
 };
 
@@ -1359,13 +1324,6 @@ const pdfQrText: React.CSSProperties = {
   lineHeight: 1.6,
   maxWidth: "430px",
   margin: "0 auto",
-};
-
-const pdfInstallationNote: React.CSSProperties = {
-  color: "#7A5A28",
-  fontSize: "8px",
-  lineHeight: 1.35,
-  margin: "5px 0 0",
 };
 
 const pdfInstallationDisclaimer: React.CSSProperties = {
